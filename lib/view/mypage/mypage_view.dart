@@ -14,6 +14,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../utils/analytics/analytics.dart';
 import 'package:udaadaa/view/mypage/refund_view.dart';
+import 'package:udaadaa/view/mypage/challenge_rule_first_view.dart';
 
 class MyPageView extends StatelessWidget {
   const MyPageView({super.key});
@@ -224,8 +225,8 @@ class MyPageView extends StatelessWidget {
                 child: Text('닉네임 변경'),
               ),
               const PopupMenuItem(
-                value: 'change_calorie',
-                child: Text('칼로리 설정'),
+                value: 'change_weight',
+                child: Text('몸무게 설정'),
               ),
               PopupMenuItem(
                 value: 'push_setting',
@@ -238,6 +239,10 @@ class MyPageView extends StatelessWidget {
               const PopupMenuItem(
                 value: 'refund_policy',
                 child: Text('상금규정'),
+              ),
+              const PopupMenuItem(
+                value: 'challenge_rule',
+                child: Text('챌린지 규칙'),
               ),
               const PopupMenuItem(
                 value: 'withdraw',
@@ -325,11 +330,11 @@ class MyPageView extends StatelessWidget {
                       );
                     });
                 break;
-              case 'change_calorie':
+              case 'change_weight':
                 Analytics().logEvent(
-                  "마이페이지_칼로리",
+                  "마이페이지_몸무게",
                   parameters: {
-                    "클릭": "칼로리변경",
+                    "클릭": "몸무게변경",
                     "챌린지상태": context.read<AuthCubit>().getChallengeStatus(),
                   },
                 );
@@ -459,6 +464,20 @@ class MyPageView extends StatelessWidget {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (context) => const RefundView(),
+                  ),
+                );
+                break;
+              case 'challenge_rule':
+                Analytics().logEvent(
+                  "마이페이지_챌린지규칙",
+                  parameters: {
+                    "클릭": "챌린지규칙",
+                    "챌린지상태": context.read<AuthCubit>().getChallengeStatus(),
+                  },
+                );
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const ChallengeRuleFirstView(),
                   ),
                 );
                 break;
