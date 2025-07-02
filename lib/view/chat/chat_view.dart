@@ -532,7 +532,7 @@ class _ChatViewState extends State<ChatView> {
                             offset: const Offset(0, -4),
                           ),
                         ]),
-                        inputTextStyle: Theme.of(context).textTheme.bodyMedium,
+                        inputTextStyle: Theme.of(context).textTheme.bodyLarge,
                         inputDecoration: InputDecoration(
                           isDense: true,
                           focusedBorder: OutlineInputBorder(
