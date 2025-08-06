@@ -24,6 +24,13 @@ class ProfileCubit extends Cubit<ProfileState> {
     null,
     null,
     null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
     null
   ];
 
@@ -135,18 +142,30 @@ class ProfileCubit extends Cubit<ProfileState> {
       return;
     }
     try {
-      DateTime tmpDate = date.subtract(const Duration(days: 6));
-      for (int i = 0; i < 7; i++) {
+      final isToday = date.year == DateTime.now().year &&
+          date.month == DateTime.now().month &&
+          date.day == DateTime.now().day;
+      DateTime startDate;
+
+      if (isToday) {
+        // 오늘 날짜인 경우: 14일 전부터 오늘까지
+        startDate = date.subtract(const Duration(days: 13));
+      } else {
+        // 다른 날짜인 경우: 선택된 날짜부터 13일 후까지
+        startDate = date;
+      }
+
+      for (int i = 0; i < 14; i++) {
+        final targetDate = startDate.add(Duration(days: i));
         final reportMap = await supabase
             .from('report')
             .select()
-            .eq('date', tmpDate.toIso8601String());
+            .eq('date', targetDate.toIso8601String());
         if (reportMap.isEmpty) {
           _weeklyReport[i] = null;
         } else {
           _weeklyReport[i] = Report.fromMap(map: reportMap[0]);
         }
-        tmpDate = tmpDate.add(const Duration(days: 1));
       }
       logger.d(_weeklyReport);
 
