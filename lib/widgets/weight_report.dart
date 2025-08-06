@@ -71,12 +71,27 @@ class WeightReport extends StatelessWidget {
             child: LineChart(
               LineChartData(
                 minX: 0,
-                maxX: 6,
+                maxX: 13,
                 minY: minWeight,
                 maxY: maxWeight,
                 lineBarsData: [
                   LineChartBarData(
-                    spots: List.generate(weeklyReport.length, (index) {
+                    spots: List.generate(14, (index) {
+                      final isToday =
+                          selectedDate.year == DateTime.now().year &&
+                              selectedDate.month == DateTime.now().month &&
+                              selectedDate.day == DateTime.now().day;
+
+                      DateTime targetDate;
+                      if (isToday) {
+                        // 오늘 날짜인 경우: 14일 전부터 오늘까지
+                        targetDate =
+                            selectedDate.subtract(Duration(days: 13 - index));
+                      } else {
+                        // 다른 날짜인 경우: 선택된 날짜부터 13일 후까지
+                        targetDate = selectedDate.add(Duration(days: index));
+                      }
+
                       final report = weeklyReport[index];
                       final weight = sanitizeToY(report?.weight ?? 0.0);
                       // ✅ weight가 0이면 그래프에 안 보이게 null 처리
@@ -101,15 +116,117 @@ class WeightReport extends StatelessWidget {
                       interval: 1,
                       getTitlesWidget: (double value, TitleMeta meta) {
                         final style = AppTextStyles.textTheme.bodySmall;
-                        final int index = value.toInt();
-                        if (index >= 0 && index <= 6) {
-                          return Text(
-                            getDate(selectedDate
-                                .subtract(Duration(days: 6 - index))),
-                            style: style,
-                          );
+                        final index = value.toInt();
+                        final isToday =
+                            selectedDate.year == DateTime.now().year &&
+                                selectedDate.month == DateTime.now().month &&
+                                selectedDate.day == DateTime.now().day;
+
+                        // 짝수 인덱스(0, 2, 4, 6, 8, 10, 12)만 날짜 표시
+                        if (index % 2 != 0) {
+                          return Text('', style: style);
                         }
-                        return const SizedBox.shrink();
+
+                        if (isToday) {
+                          // 오늘 날짜인 경우: 14일 전부터 오늘까지
+                          switch (index) {
+                            case 0:
+                              return Text(
+                                  getDate(
+                                    selectedDate
+                                        .subtract(const Duration(days: 13)),
+                                  ),
+                                  style: style);
+                            case 2:
+                              return Text(
+                                  getDate(
+                                    selectedDate
+                                        .subtract(const Duration(days: 11)),
+                                  ),
+                                  style: style);
+                            case 4:
+                              return Text(
+                                  getDate(
+                                    selectedDate
+                                        .subtract(const Duration(days: 9)),
+                                  ),
+                                  style: style);
+                            case 6:
+                              return Text(
+                                  getDate(
+                                    selectedDate
+                                        .subtract(const Duration(days: 7)),
+                                  ),
+                                  style: style);
+                            case 8:
+                              return Text(
+                                  getDate(
+                                    selectedDate
+                                        .subtract(const Duration(days: 5)),
+                                  ),
+                                  style: style);
+                            case 10:
+                              return Text(
+                                  getDate(
+                                    selectedDate
+                                        .subtract(const Duration(days: 3)),
+                                  ),
+                                  style: style);
+                            case 12:
+                              return Text(
+                                  getDate(
+                                    selectedDate
+                                        .subtract(const Duration(days: 1)),
+                                  ),
+                                  style: style);
+                            default:
+                              return Text('', style: style);
+                          }
+                        } else {
+                          // 다른 날짜인 경우: 선택된 날짜가 맨 왼쪽에 오도록
+                          switch (index) {
+                            case 0:
+                              return Text(getDate(selectedDate), style: style);
+                            case 2:
+                              return Text(
+                                  getDate(
+                                    selectedDate.add(const Duration(days: 2)),
+                                  ),
+                                  style: style);
+                            case 4:
+                              return Text(
+                                  getDate(
+                                    selectedDate.add(const Duration(days: 4)),
+                                  ),
+                                  style: style);
+                            case 6:
+                              return Text(
+                                  getDate(
+                                    selectedDate.add(const Duration(days: 6)),
+                                  ),
+                                  style: style);
+                            case 8:
+                              return Text(
+                                  getDate(
+                                    selectedDate.add(const Duration(days: 8)),
+                                  ),
+                                  style: style);
+                            case 10:
+                              return Text(
+                                  getDate(
+                                    selectedDate.add(const Duration(days: 10)),
+                                  ),
+                                  style: style);
+                            case 12:
+                              return Text(
+                                  getDate(
+                                    selectedDate.add(const Duration(days: 12)),
+                                  ),
+                                  style: style);
+                            default:
+                              return Text('', style: style);
+                          }
+                        }
                       },
                     ),
                   ),
