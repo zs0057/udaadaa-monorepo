@@ -75,6 +75,6 @@ Supabase에서도 Edge Function, RLS 및 Database Function을 이용해 비즈�
 
 - `01-system-inventory.md`: 현재 기능과 Supabase 의존성 목록
 - `02-as-is-architecture.md`: 기존 시스템과 데이터 흐름
-- `03-to-be-architecture.md`: Spring 모듈형 모놀리스 목표 구조
-- `04-domain-boundaries.md`: Udaadaa 도메인과 모듈 책임
+- `03-domain-boundaries.md`: Udaadaa 도메인과 모듈 책임
+- `04-to-be-architecture.md`: Spring 모듈형 모놀리스 목표 구조
 - `05-migration-roadmap.md`: 도메인별 이전 순서와 완료 기준
