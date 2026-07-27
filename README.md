@@ -31,10 +31,14 @@ Spring 서버를 비즈니스 로직의 중심으로 두어 책임을 명확히 
 ## 진행 현황
 
 - [x] 마이그레이션 필요성과 기본 방향 정의
+  - 백엔드 제어권을 확보하고 비즈니스 로직을 Spring으로 점진적으로 이전합니다.
+  - 상세 문서: [Migration Overview](docs/migration/00-overview.md)
 - [x] Flutter·Spring 모노레포 구성 및 기존 Flutter 이력 보존
+  - 기존 Flutter `main` 이력을 보존하고 Flutter와 Spring을 하나의 저장소에서 관리합니다.
 - [ ] 현재 기능과 Supabase 의존성 목록 작성
 - [ ] AS-IS 데이터 흐름 및 시스템 구조 작성
-- [ ] 목표 아키텍처와 도메인 경계 확정
+- [ ] 도메인과 모듈 경계 확정
+- [ ] 목표 아키텍처와 주요 기술 결정 확정
 - [ ] 도메인별 마이그레이션 로드맵 작성
 - [ ] 기능 단위 Spring 이전 및 검증
-- [ ] Supabase 직접 의존성 순차 제거
+- [ ] 운영 안정성 확인 및 Supabase 직접 의존성 제거

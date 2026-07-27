@@ -7,8 +7,8 @@
 ## 저장소 구조
 
 - `udaadaa/`: 기존 Flutter 애플리케이션과 Supabase 구성. 현재 동작을 확인하는 기준이다.
-- `udaadaa_server/`: 새 Spring 백엔드와 마이그레이션 산출물.
-- `udaadaa_server/docs/`: 시스템 및 마이그레이션 문서.
+- `udaadaa_server/`: 새 Spring 백엔드 구현.
+- `docs/migration/`: 시스템 분석, 아키텍처 및 마이그레이션 문서.
 - `docs/ai/`: Codex와 AI 에이전트의 작업 방식.
 
 ## 필수 작업 원칙
