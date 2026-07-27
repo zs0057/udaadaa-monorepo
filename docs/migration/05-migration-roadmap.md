@@ -78,6 +78,8 @@ Payment와 Admin은 현재 기능 마이그레이션이 안정된 후 별도 로
 
 ## 4. 단계 0: Spring 공통 기반
 
+상세 계획과 진행 기록: [Phase 0: Spring Foundation](phases/phase-00-foundation.md)
+
 ### 목표
 
 모든 도메인이 공통으로 사용할 실행·인증·데이터 접근·관찰 기반을 만든다.
@@ -391,7 +393,7 @@ Supabase PostgreSQL, Auth와 Storage는 초기 마이그레이션에서 바로 �
 
 | 단계 | 상태 | 완료 증거 |
 |---|---|---|
-| 0. Spring 공통 기반 | 예정 | 빌드·인증·DB·모듈 검증 결과 |
+| 0. Spring 공통 기반 | 진행 중 | [Phase 0 계획](phases/phase-00-foundation.md), 이후 빌드·인증·DB·모듈 검증 결과 |
 | 1. Member | 예정 | API·권한 테스트와 Flutter 전환 결과 |
 | 2. Moderation | 예정 | 차단 규칙 테스트와 단일 쓰기 확인 |
 | 3. Chat + Notification | 예정 | 채팅 E2E·복구·지연·중복 Push 검증 |

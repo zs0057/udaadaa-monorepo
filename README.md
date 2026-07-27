@@ -32,4 +32,24 @@ Udaadaa는 채팅과 챌린지를 통해 사용자가 건강 목표를 꾸준히
   - 공통 기반부터 Member, Moderation, Chat·Notification, Challenge, Record, Social과 의존성 제거까지의 순서와 완료·롤백 기준을 정의했습니다.
   - 상세 문서: [Migration Roadmap](docs/migration/05-migration-roadmap.md)
 - [ ] 기능 단위 Spring 이전 및 검증
+  - [ ] **Phase 0 — Spring 공통 기반** · 진행 중
+    - Spring 실행·인증·DB·모듈·오류·관찰·테스트 기반을 준비합니다.
+    - 현재 상태: 작업 범위와 완료 기준 작성 완료, 기술 환경 조사 예정
+    - 상세 문서: [Phase 0 Foundation](docs/migration/phases/phase-00-foundation.md)
+  - [ ] **Phase 1 — Member** · 예정
+    - Supabase JWT 사용자와 서비스 회원을 연결하고 프로필 조회·수정을 이전합니다.
+  - [ ] **Phase 2 — Moderation** · 예정
+    - 사용자 차단과 공통 상호작용 허용 규칙을 Spring으로 이전합니다.
+  - [ ] **Phase 3 — Chat + Notification** · 예정
+    - 채팅 저장·STOMP 전달·누락 복구·읽음·Push를 이전합니다.
+  - [ ] **Phase 4 — Challenge** · 예정
+    - 챌린지 참여·기간·미션 진행과 성공 판정을 이전합니다.
+  - [ ] **Phase 5 — Record + 미션 통합** · 예정
+    - 식단·운동·체중 기록과 `mission_complete` 흐름을 이전합니다.
+  - [ ] **Phase 6 — Social** · 예정
+    - 공개 피드·반응·피드 숨김을 이전합니다.
+  - [ ] **Phase 7 — 회원 탈퇴** · 예정
+    - 상태 전환, 데이터 정리와 외부 Auth 삭제·재시도를 구현합니다.
 - [ ] 운영 안정성 확인 및 Supabase 직접 의존성 제거
+  - [ ] **Phase 8 — 운영 안정화·의존성 제거** · 예정
+    - 운영 지표를 확인한 뒤 Flutter의 Supabase 직접 호출, Realtime, Trigger와 Edge Function을 순차적으로 제거합니다.
