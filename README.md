@@ -7,7 +7,12 @@ Udaadaa는 채팅과 챌린지를 통해 사용자가 건강 목표를 꾸준히
 ## 진행 현황
 
 - [x] 마이그레이션 필요성과 기본 방향 정의
-  - 백엔드 제어권을 확보하고 비즈니스 로직을 Spring으로 점진적으로 이전합니다.
+  - **기존 문제**
+    1. Supabase 관리형 백엔드에 의존하여 실시간 연결, 재연결, 장애 복구, 로그와 모니터링을 서비스 요구사항에 맞게 세밀하게 제어하기 어렵습니다.
+    2. UI와 비즈니스 로직이 Flutter, Edge Function, RLS와 Database Function에 분산되어 테스트, 트랜잭션 관리와 기능 확장이 어렵습니다.
+  - **마이그레이션 목적**
+    1. Spring에서 인증, 권한, 채팅 연결·복구와 모니터링을 통합 관리하여 백엔드 제어권을 확보합니다.
+    2. Flutter는 화면과 사용자 입력에 집중하고 Spring은 비즈니스 규칙과 트랜잭션을 담당하도록 책임을 분리합니다.
   - 상세 문서: [Migration Overview](docs/migration/00-overview.md)
 - [x] Flutter·Spring 모노레포 구성 및 기존 Flutter 이력 보존
   - 기존 Flutter `main` 이력을 보존하고 Flutter와 Spring을 하나의 저장소에서 관리합니다.
