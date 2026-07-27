@@ -31,14 +31,15 @@
 - 로그·지표·오류를 Spring 요청 단위로 추적한다.
 - 기능 단위로 이전하여 서비스 중단과 데이터 유실을 방지한다.
 
-### 이번 문서에서 확정하지 않는 내용
+### 이번 문서에서 상세 구현하지 않는 내용
 
 - 전체 REST endpoint와 Request·Response 명세
 - 최종 SQL DDL과 migration 파일
-- WebSocket의 STOMP 또는 자체 프로토콜 선택
 - 배포 인프라와 서버 인스턴스 수
 - 캐시·외부 메시지 브로커 도입 시점
 - 결제사와 보증금 정산 규칙
+- 전체 STOMP destination과 frame 명세
+- 이미지 업로드 승인 API의 상세 명세
 
 ## 3. 확정된 설계 조건
 
@@ -51,11 +52,14 @@
 | 초기 DB | 기존 Supabase PostgreSQL 유지 |
 | 초기 이미지 저장 | 기존 Supabase Storage 유지 |
 | 일반 클라이언트 통신 | REST API |
-| 채팅 실시간 전달 | WebSocket |
+| 채팅 실시간 전달 | STOMP 기반 WebSocket |
 | 채팅 누락 복구 | PostgreSQL 기준 REST API |
 | 동기 모듈 연결 | Spring 내부 Application Service 호출 |
 | 후속 처리 | Spring 내부 이벤트 |
 | 초기 메시지 브로커 | Kafka·RabbitMQ 사용하지 않음 |
+| 초기 이벤트 보장 | Outbox 없이 Spring 내부 이벤트 사용 |
+| 초기 DB Schema | 기존 단일 Schema 유지, 모듈 규칙으로 소유권 제한 |
+| 모듈 경계 검증 | Spring Modulith 사용 |
 | 외부 Push | Firebase Cloud Messaging 유지 |
 | 이전 방식 | 도메인·기능 단위 점진적 전환, 애플리케이션 이중 쓰기 금지 |
 
@@ -146,7 +150,7 @@ module
 | 상황 | 통신 방식 | 선택 이유 |
 |---|---|---|
 | Flutter의 일반 조회·생성·수정 | REST API | 요청과 응답이 명확하고 테스트·오류·재시도 처리가 쉬움 |
-| 채팅 새 메시지 전달 | WebSocket | 서버가 연결된 사용자에게 새 메시지를 즉시 전달해야 함 |
+| 채팅 새 메시지 전달 | STOMP 기반 WebSocket | Spring의 지원을 활용해 방 단위 구독·발행을 단순하게 구현할 수 있음 |
 | 채팅 연결 복구·누락 조회 | REST API | WebSocket 연결 중 놓친 이벤트를 DB의 저장 결과로 복구해야 함 |
 | 즉시 결과가 필요한 모듈 연결 | Spring 내부 메서드 | 같은 프로세스에서 바로 결과를 받고 불필요한 네트워크 호출을 만들지 않음 |
 | 여러 모듈이 함께 성공해야 하는 작업 | 조정 서비스와 DB 트랜잭션 | 챌린지 방 참가처럼 일부 성공을 허용하지 않는 작업을 함께 커밋하거나 취소해야 함 |
@@ -437,8 +441,9 @@ Flutter → Social REST API
 ### 이미지
 
 - 초기에는 기존 Supabase Storage Bucket과 파일 경로를 유지한다.
-- Flutter가 임의의 사용자·방 경로에 업로드하지 못하도록 Spring이 업로드 권한과 경로를 결정해야 한다.
-- Spring을 통한 파일 proxy 업로드와 제한된 직접 업로드 방식은 비용·보안·구현 난이도를 비교한 뒤 결정한다.
+- Spring이 사용자·방·기록 권한, 허용 경로, 파일 크기와 MIME 타입을 확인한다.
+- Flutter는 Spring이 승인한 범위 안에서 Supabase Storage에 직접 업로드한다.
+- 이미지 파일 자체를 Spring이 proxy하지 않아 서버 부하를 줄인다.
 - DB 저장 실패 시 임시 파일 정리 또는 만료 정책을 둔다.
 - 장기적으로 Storage 구현이 바뀌어도 Chat과 Record 도메인 규칙은 변경되지 않도록 인터페이스로 분리한다.
 
@@ -528,24 +533,30 @@ flowchart LR
 ### 1차 확정
 
 - Spring 모듈형 모놀리스
-- REST API와 WebSocket 병행
+- REST API와 STOMP 기반 WebSocket 병행
 - PostgreSQL을 메시지와 업무 데이터의 최종 원본으로 사용
 - REST 기반 채팅 누락 복구
 - Spring 내부 메서드와 내부 이벤트 사용
 - 초기 Supabase Auth·PostgreSQL·Storage 유지
 - FCM 유지
 - 초기 외부 메시지 브로커 제외
+- 초기 Outbox 제외, Spring 내부 이벤트 사용
+- 기존 단일 PostgreSQL Schema 유지
+- Spring Modulith로 모듈 경계 검증
+- Spring 승인 후 Flutter의 제한된 Storage 직접 업로드
+- UUID 메시지 식별자, BIGINT 순번과 방별 마지막 읽음 순번 사용
+- 회원 탈퇴 상태 전환과 외부 Auth 삭제 재시도
 - 기능 단위 전환과 애플리케이션 이중 쓰기 금지
 
-### 결정 필요
+### 상세 설계 필요
 
-- WebSocket에서 STOMP를 사용할지 자체 메시지 프로토콜을 사용할지
-- Flutter 이미지 업로드를 Spring proxy로 처리할지 제한된 직접 업로드로 처리할지
-- Spring Modulith를 도입해 모듈 경계와 이벤트를 검증할지
-- 내부 이벤트의 재시도·유실 방지를 위해 Outbox가 필요한 시점
-- DB를 모듈별 PostgreSQL Schema로 분리할지 단일 Schema에서 규칙으로 제한할지
-- 메시지 순서 기준과 읽음 cursor의 정확한 데이터 타입
-- 회원 탈퇴의 보존·익명화·외부 Auth 삭제 순서
+- STOMP destination, frame과 JWT 연결·구독 권한 검증 방식
+- Storage 업로드 승인 API와 임시 파일 정리 방식
+- Spring Boot와 Spring Modulith의 호환 버전
+- Chat 테이블·인덱스와 BIGINT 순번 생성 범위
+- 회원 데이터의 삭제·익명화·보존 기준과 작업 순서
+
+초기 기술 결정과 재검토 조건은 [ADR-001 초기 기술 결정](adr/ADR-001-initial-technical-decisions.md)에 기록한다.
 
 ## 20. 다음 문서와 완료 조건
 
