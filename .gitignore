@@ -1,0 +1,16 @@
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+*.iml
+
+# Local migration artifacts and recoverable backup
+tmp/
+.migration-backup/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
