@@ -19,7 +19,9 @@ Udaadaa는 채팅과 챌린지를 통해 사용자가 건강 목표를 꾸준히
 - [x] 현재 기능과 Supabase 의존성 목록 작성
   - Flutter 기능과 Supabase 자원을 연결하고 실제 배포 메타데이터와 교차 검증했습니다.
   - 상세 문서: [System Inventory](docs/migration/01-system-inventory.md)
-- [ ] AS-IS 데이터 흐름 및 시스템 구조 작성
+- [x] AS-IS 데이터 흐름 및 시스템 구조 작성
+  - 현재 구성 요소의 책임과 인증·채팅·미션·알림 등 핵심 기능의 처리 순서 및 실패 경계를 정리했습니다.
+  - 상세 문서: [AS-IS Architecture](docs/migration/02-as-is-architecture.md)
 - [ ] 도메인과 모듈 경계 확정
 - [ ] 목표 아키텍처와 주요 기술 결정 확정
 - [ ] 도메인별 마이그레이션 로드맵 작성
