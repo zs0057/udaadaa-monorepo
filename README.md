@@ -22,8 +22,11 @@ Udaadaa는 채팅과 챌린지를 통해 사용자가 건강 목표를 꾸준히
 - [x] AS-IS 데이터 흐름 및 시스템 구조 작성
   - 현재 구성 요소의 책임과 인증·채팅·미션·알림 등 핵심 기능의 처리 순서 및 실패 경계를 정리했습니다.
   - 상세 문서: [AS-IS Architecture](docs/migration/02-as-is-architecture.md)
-- [ ] 도메인과 모듈 경계 확정
+- [x] 도메인과 모듈 경계 확정
+  - Member, Chat, Challenge, Record, Social, Moderation과 Notification의 책임과 데이터 소유권을 정의했습니다.
+  - 상세 문서: [Domain Boundaries](docs/migration/03-domain-boundaries.md)
 - [ ] 목표 아키텍처와 주요 기술 결정 확정
+  - 검토 초안: [TO-BE Architecture](docs/migration/04-to-be-architecture.md)
 - [ ] 도메인별 마이그레이션 로드맵 작성
 - [ ] 기능 단위 Spring 이전 및 검증
 - [ ] 운영 안정성 확인 및 Supabase 직접 의존성 제거
