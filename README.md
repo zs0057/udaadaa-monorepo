@@ -1,0 +1,106 @@
+# Udaadaa Monorepo
+
+Udaadaa는 채팅과 챌린지를 통해 사용자가 건강 목표를 꾸준히 이어가도록 돕는 서비스입니다.
+
+이 저장소는 기존 Flutter·Supabase 애플리케이션과 새 Spring 백엔드를 함께 관리하며, 서비스 중단과 데이터 유실 없이 백엔드를 점진적으로 마이그레이션하기 위한 모노레포입니다.
+
+## 왜 마이그레이션하는가
+
+초기 Udaadaa는 Flutter가 Supabase의 Database, Auth, Realtime, Storage를 직접 사용하고, 일부 서버 로직을 Edge Function으로 처리하는 구조로 빠르게 서비스를 개발했습니다. 하지만 실제 운영과 기능 확장 과정에서 다음과 같은 한계가 확인되었습니다.
+
+### 1. 백엔드 제어권과 채팅 안정성
+
+- 실제 사용자로부터 채팅 전송과 수신이 간헐적으로 느리다는 피드백이 발생했습니다.
+- 현재 채팅 처리는 Flutter, Database, Realtime과 Edge Function에 분산되어 있어 지연 발생 구간을 추적하기 어렵습니다.
+- Realtime 연결 상태, 재연결과 누락 메시지 복구 정책을 서비스 요구사항에 맞게 통합 관리하기 어렵습니다.
+- DB, 인증과 실시간 통신 장애가 외부 플랫폼에 발생하면 서비스에서 직접 대응할 수 있는 범위가 제한됩니다.
+- 로그와 모니터링이 여러 구성 요소에 분산되어 장애 원인 파악과 복구가 어렵습니다.
+
+간헐적인 채팅 지연이 모두 Supabase 자체에서 발생한다고 단정할 수는 없습니다. 기존 클라이언트의 메시지 전송·구독 방식도 함께 개선해야 합니다. 마이그레이션의 목적은 단순히 기술을 교체하는 것이 아니라, 메시지 처리 과정을 서비스에서 직접 관찰하고 연결·복구 정책을 제어할 수 있는 기반을 확보하는 것입니다.
+
+### 2. 비즈니스 로직 분리와 기능 확장
+
+- Flutter에 화면, 데이터 접근과 비즈니스 규칙이 함께 존재합니다.
+- 채팅의 메시지, 읽음, 차단, 이미지와 알림 처리가 클라이언트 상태 관리 코드에 집중되어 있습니다.
+- 규칙 변경 시 Flutter, Edge Function, RLS와 Database Function을 함께 확인해야 합니다.
+- 클라이언트의 DB 직접 접근은 서버 차원의 일관된 권한 검증과 트랜잭션 관리에 한계가 있습니다.
+- 향후 보증금, 결제, 환급, 몰수와 정산 기능에는 중복 처리 방지, 감사 로그와 안전한 트랜잭션이 필요합니다.
+
+Spring 서버를 비즈니스 로직의 중심으로 두어 책임을 명확히 하고, 기능별 테스트와 운영 대응이 가능한 구조로 전환합니다.
+
+## 현재 구조와 목표 구조
+
+### AS-IS
+
+```text
+Flutter
+ ├─ Supabase Auth
+ ├─ Supabase Database
+ ├─ Supabase Realtime
+ ├─ Supabase Storage
+ └─ Edge Function
+```
+
+- Flutter가 Supabase 기능과 데이터에 직접 접근
+- 비즈니스 로직과 상태 관리가 클라이언트 및 Supabase 구성 요소에 분산
+- 실시간 연결 장애와 메시지 누락 복구를 클라이언트에서 처리
+
+### TO-BE
+
+```text
+Flutter
+ └─ Spring API / WebSocket
+     ├─ 인증과 권한 검증
+     ├─ 비즈니스 규칙
+     ├─ 트랜잭션
+     └─ PostgreSQL
+```
+
+- Flutter는 화면 표시와 사용자 입력 처리에 집중
+- Spring은 인증, 권한, 비즈니스 규칙과 트랜잭션을 관리
+- PostgreSQL을 서비스 데이터의 최종 원본으로 사용
+- 저장된 메시지를 기준으로 연결 해제 중 누락된 채팅을 복구
+- 초기에는 도메인별 책임을 나눈 Spring 모듈형 모놀리스로 구성
+
+## 저장소 구조
+
+```text
+udaadaa-monorepo/
+├── AGENTS.md                 # Udaadaa 마이그레이션 AI 작업 규칙
+├── docs/
+│   └── ai/                   # AI 기법과 에이전트 운영 문서
+├── udaadaa/                  # 기존 Flutter·Supabase 애플리케이션
+└── udaadaa_server/           # 새로운 Spring 백엔드와 마이그레이션 문서
+```
+
+- 기존 Flutter 저장소의 `main` 커밋 이력은 이 모노레포에 보존되어 있습니다.
+- `udaadaa/`는 별도 Git 저장소가 아닌 모노레포의 일반 디렉터리입니다.
+- Flutter와 Spring의 연관 변경을 하나의 커밋에서 함께 관리할 수 있습니다.
+
+## 마이그레이션 원칙
+
+- 기존 서비스를 한 번에 교체하지 않고 도메인 단위로 이전합니다.
+- 초기에는 Spring이 기존 Supabase PostgreSQL과 JWT를 활용합니다.
+- 기능의 읽기와 쓰기를 검증한 후 Flutter의 직접 호출을 Spring API로 전환합니다.
+- 같은 기능을 Flutter와 Spring이 동시에 수정하는 이중 쓰기를 피합니다.
+- 저장된 데이터를 기준으로 연결 장애 중 발생한 누락 메시지를 복구합니다.
+- 모든 기능 전환 후 Realtime, Edge Function, Auth, Storage와 Database 직접 의존성을 순차적으로 제거합니다.
+
+## 진행 현황
+
+- [x] 마이그레이션 필요성과 기본 방향 정의
+- [x] Flutter·Spring 모노레포 구성 및 기존 Flutter 이력 보존
+- [ ] 현재 기능과 Supabase 의존성 목록 작성
+- [ ] AS-IS 데이터 흐름 및 시스템 구조 작성
+- [ ] 목표 아키텍처와 도메인 경계 확정
+- [ ] 도메인별 마이그레이션 로드맵 작성
+- [ ] 기능 단위 Spring 이전 및 검증
+- [ ] Supabase 직접 의존성 순차 제거
+
+## 문서
+
+- [백엔드 마이그레이션 개요](udaadaa_server/docs/00-migration-overview.md)
+- [업무별 AI 기법 가이드](docs/ai/task-technique-guide.md)
+- [서브에이전트 운영 정책](docs/ai/subagent-policy.md)
+- [기존 Flutter 프로젝트 소개](udaadaa/README.md)
+
