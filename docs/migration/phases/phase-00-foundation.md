@@ -15,7 +15,7 @@
 
 - `udaadaa_server/`에는 아직 Spring 빌드 파일과 소스 코드가 없다.
 - 기존 Flutter·Supabase 애플리케이션은 `udaadaa/`에 보존되어 있다.
-- 초기 Spring 서버는 기존 Supabase Auth, PostgreSQL과 Storage를 유지한다.
+- 초기 Spring 서버는 기존 Supabase 프로젝트가 제공하는 Auth, PostgreSQL Database와 Storage를 그대로 사용한다. 단, Flutter의 직접 접근을 점진적으로 Spring을 통한 접근으로 전환한다.
 - 목표 구조는 Spring 기반 모듈형 모놀리스다.
 - 모듈 경계 검증에는 Spring Modulith를 사용하기로 결정했다.
 - 초기에는 Kafka, RabbitMQ와 Outbox를 사용하지 않는다.
