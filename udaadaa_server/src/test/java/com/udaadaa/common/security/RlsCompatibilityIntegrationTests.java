@@ -4,27 +4,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.udaadaa.AbstractIntegrationTest;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.UUID;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 
 class RlsCompatibilityIntegrationTests extends AbstractIntegrationTest {
 
     private static final UUID USER_A = UUID.fromString("4fa5a560-d4d2-41f3-b218-c84ac2a2f847");
     private static final UUID USER_B = UUID.fromString("a6c4cda5-a044-4f44-a75c-434d2592551d");
 
-    @Value("${spring.datasource.url}")
-    private String jdbcUrl;
-
-    @Value("${spring.datasource.username}")
-    private String username;
-
-    @Value("${spring.datasource.password}")
-    private String password;
+    @Autowired
+    private DataSource dataSource;
 
     @BeforeAll
     void prepareRlsFixture() throws Exception {
@@ -78,6 +72,6 @@ class RlsCompatibilityIntegrationTests extends AbstractIntegrationTest {
     }
 
     private Connection adminConnection() throws Exception {
-        return DriverManager.getConnection(jdbcUrl, username, password);
+        return dataSource.getConnection();
     }
 }
