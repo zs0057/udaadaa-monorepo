@@ -33,7 +33,22 @@ Supabase를 즉시 제거하지 않는다. Spring을 업무 규칙과 통신의 
 - 기존 RLS·Trigger·Edge Function은 해당 기능의 Spring 전환이 검증될 때까지 유지한다.
 - Spring 전환 후에는 Flutter의 직접 DB 호출과 Supabase 전용 서버 로직을 제거한다.
 
-## 4. 구현 전 확인
+## 4. 기존 RLS 대응 방안
+
+Spring Security와 Supabase RLS는 자동으로 사용자 정보를 공유하지 않는다. Spring은 JDBC/JPA의 DB Role로 연결하므로 기존 `auth.uid()` 기반 RLS를 Spring 권한 검사에 재사용하지 않는다.
+
+| 단계 | Flutter 직접 접근 | 업무 권한 기준 | RLS 처리 |
+|---|---|---|---|
+| 과도기 | 전환되지 않은 기능만 허용 | Spring 전환 기능은 Spring 내부 정책 | 기존 `authenticated` 정책 유지, `spring_app` 전용 정책 추가 |
+| 기능 전환 완료 | 해당 기능 제거 | Spring 내부 정책 | 해당 기능의 Flutter용 RLS·Data API 권한 제거 |
+| 2차 인프라 이전 | 없음 | Spring 내부 정책 | Supabase `auth.uid()` 기반 정책 제거 |
+
+- `spring_app` Role은 서버 환경에서만 사용하며 Flutter에 노출하지 않는다.
+- Spring은 방 참가, 차단, 데이터 소유권 같은 업무 권한을 직접 검사한다.
+- `spring_app`의 RLS 정책은 서버 Role 경계만 확인하며, 사용자별 권한 규칙을 중복 구현하지 않는다.
+- 기능별 쓰기 주체는 Flutter 또는 Spring 중 하나만 활성화한다.
+
+## 5. 구현 전 확인
 
 | 항목 | 확인 기준 |
 |---|---|
@@ -42,7 +57,7 @@ Supabase를 즉시 제거하지 않는다. Spring을 업무 규칙과 통신의 
 | Storage | 업로드 경로·MIME·크기 제한, 업로드 후 파일 참조 검증, 미완료 파일 정리 |
 | 전환 | 기존 Realtime·Trigger·Edge Function과 Spring 경로가 동시에 실행되지 않는지 확인 |
 
-## 5. 결론
+## 6. 결론
 
 Supabase와 Spring의 병행은 가능하다. 단, 이는 Supabase 기능을 그대로 사용하는 구조가 아니라 **Supabase는 초기 인프라 제공자**, **Spring은 서비스 제어권의 중심**으로 역할을 분리하는 과도기 구조다. 2차 이전 시 Auth·PostgreSQL·Storage를 독립 인프라로 교체한다.
 
