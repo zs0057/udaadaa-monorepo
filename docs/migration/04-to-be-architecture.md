@@ -63,7 +63,7 @@
 | 외부 Push | Firebase Cloud Messaging 유지 |
 | 이전 방식 | 도메인·기능 단위 점진적 전환, 애플리케이션 이중 쓰기 금지 |
 
-[ADR-002 Supabase 인프라 제거 시점 결정](adr/ADR-002-supabase-removal-timing.md)에 따라 Spring 기능을 먼저 안정화하고 마지막 안정화 단계에서 Supabase Auth·Database·Storage를 독립 인프라로 이전하는 대안 B를 사용한다.
+[ADR-002 인프라 기술 검토](adr/ADR-002-infrastructure-technical-review.md)에 따라 Spring 기능을 먼저 안정화하고 마지막 안정화 단계에서 Supabase Auth·Database·Storage를 독립 인프라로 이전하는 대안 B를 사용한다.
 
 ## 4. 목표 시스템 전체 구조
 
