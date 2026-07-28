@@ -1,6 +1,6 @@
 # Phase 0: Spring Foundation
 
-> 상태: 진행 중 (실행 계획 확정, 0-A 대기)
+> 상태: 검증 중 (로컬 공통 기반 완료, 운영 Supabase 연동 대기)
 > 시작일: 2026-07-28
 
 ## 1. 문서 목적
@@ -13,21 +13,23 @@
 
 ### 확인된 사실
 
-- `udaadaa_server/`에는 아직 Spring 빌드 파일과 소스 코드가 없다.
+- `udaadaa_server/`에 Spring Boot 프로젝트와 공통 기반이 구현되어 있다.
 - 기존 Flutter·Supabase 애플리케이션은 `udaadaa/`에 보존되어 있다.
 - [ADR-002](../adr/ADR-002-infrastructure-technical-review.md)에 따라 초기 Spring 서버는 기존 Supabase Auth, PostgreSQL Database와 Storage를 유지한다. Spring 기능을 먼저 안정화하고 마지막 안정화 단계에서 독립 인프라로 이전한다.
-- 목표 구조는 Spring 기반 모듈형 모놀리스다.
-- 모듈 경계 검증에는 Spring Modulith를 사용하기로 결정했다.
-- 초기에는 Kafka, RabbitMQ와 Outbox를 사용하지 않는다.
+- 현재 Supabase 프로젝트는 정상 상태이며 PostgreSQL 15.14를 사용한다.
+- 현재 JWKS endpoint에는 공개 키가 없어 레거시 HMAC JWT 검증이 필요하다.
+- 운영 DB에는 아직 `spring_app` Role이 없다.
+- 목표 구조는 Spring 기반 모듈형 모놀리스이며 Spring Modulith로 경계를 검증한다.
+- 초기에는 Kafka, RabbitMQ, Outbox, STOMP와 Storage SDK를 추가하지 않는다.
 
 ### 아직 확인할 내용
 
-- 현재 안정적인 Spring Boot 버전과 Java 호환 범위
-- Spring Boot와 Spring Modulith의 호환 버전
-- Supabase 프로젝트의 현재 JWT 서명 방식과 검증 endpoint
-- Spring이 사용할 PostgreSQL 연결 방식과 최소 권한
-- 로컬·테스트 환경의 DB 구성 방식
-- CI 환경과 배포 환경
+- 실제 Supabase JWT secret을 배포 환경에 주입한 뒤 실제 사용자 token 검증
+- 운영 DB의 `spring_app` 로그인 Role·최소 권한·RLS 정책 생성과 연결 검증
+- GitHub에 반영한 뒤 GitHub Actions의 원격 실행 결과
+- 실제 배포 환경과 Secret 저장 방식
+
+상세 구현·검증 결과는 [Phase 0 Verification](phase-00-verification.md)에 분리해 기록한다.
 
 ## 3. Phase 0 목표
 
@@ -98,18 +100,18 @@ Phase 0를 조사, 결정, 문서, 생성, 설정, 구현과 검증 단계로 �
 
 | 항목 | 초기 후보 | 상태 | 확인 기준 |
 |---|---|---|---|
-| Java | LTS 버전 | 확인 필요 | Spring Boot 지원 범위, 로컬·CI 환경 |
-| Spring Boot | 현재 안정 버전 | 확인 필요 | 공식 지원 상태와 Modulith 호환성 |
-| 빌드 도구 | Gradle Kotlin DSL 우선 검토 | 확인 필요 | 사용자 선호, 학습·의존성 관리·CI |
-| 기본 패키지 | `com.udaadaa` 후보 | 확인 필요 | 서비스 소유 도메인과 패키지 명명 규칙 |
-| Web | Spring MVC | 확인 필요 | 현재 요청·응답 모델과 초기 운영 규모 |
-| DB 접근 | Spring Data JPA 우선 검토 | 확인 필요 | 기존 Schema 매핑과 쿼리 복잡도 |
-| DB migration | Flyway 우선 검토 | 확인 필요 | 기존 Supabase migration과 공존 방식 |
-| 인증 | Spring Security Resource Server | 확인 필요 | 현재 Supabase JWT 서명·issuer 방식 |
-| 모듈 검증 | Spring Modulith | 결정됨 | Spring Boot 호환 버전만 확인 |
-| 운영 상태 | Spring Boot Actuator | 확인 필요 | 노출 endpoint와 보안 범위 |
-| 테스트 DB | 별도 PostgreSQL 환경 우선 검토 | 확인 필요 | 운영 데이터 격리와 CI 재현성 |
-| CI | GitHub Actions 후보 | 확인 필요 | 저장소 운영 방식과 실행 비용 |
+| Java | 21 LTS | 결정됨 | 로컬 21.0.11과 Spring Boot 지원 범위 확인 |
+| Spring Boot | 4.1.0 | 결정됨 | 공식 안정 버전과 Java 21 호환 확인 |
+| 빌드 도구 | Gradle 9.5.1 Kotlin DSL | 결정됨 | Wrapper·dependency lock·CI 동일 명령 사용 |
+| 기본 패키지 | `com.udaadaa` | 결정됨 | 서비스 기준 최상위 package |
+| Web | Spring MVC | 결정됨 | 초기 REST API와 동기식 DB 작업에 적합 |
+| DB 접근 | Spring Data JPA | 결정됨 | 도메인 CRUD와 transaction 기반 |
+| DB migration | Flyway | 결정됨 | migration과 자동 baseline을 기본 비활성화하고 최초 적용은 별도 승인 |
+| 인증 | Spring Security Resource Server | 결정됨 | 현재 HMAC, 향후 JWKS 방식을 설정으로 전환 가능 |
+| 모듈 검증 | Spring Modulith 2.1.0 | 결정됨 | Spring Boot 4.1과 함께 경계 테스트 통과 |
+| 운영 상태 | Spring Boot Actuator | 결정됨 | health만 HTTP에 노출하고 내부 지표는 운영 경로 확정 후 추가 |
+| 테스트 DB | Testcontainers PostgreSQL 15 | 결정됨 | CI 기본값, Docker 불가 시 격리된 외부 DB 사용 가능 |
+| CI | GitHub Actions | 구성됨 | Wrapper 검증 후 `clean test` 실행, 원격 실행 대기 |
 
 기술 선택이 장기간 영향을 주거나 기존 ADR과 충돌하면 새로운 ADR을 작성한다. 단순 버전 확인과 구현 세부사항은 이 문서의 결정 기록에 남긴다.
 
@@ -189,16 +191,16 @@ udaadaa_server/
 
 | ID | 작업 | 선행 조건 | 핵심 산출물 | 상태 |
 |---|---|---|---|---|
-| 0-A | 현재 환경과 공식 자료 조사 | 없음 | 환경 현황, 호환 버전과 Supabase 연결 조건 | 예정 |
-| 0-B | 기술 기준 확정 | 0-A 결과와 사용자 승인 | 기술 결정 표와 선택 이유 | 예정 |
-| 0-C | Spring 프로젝트 생성 | 0-B 완료 | 빌드 가능한 Spring 프로젝트와 Wrapper | 예정 |
-| 0-D | 환경 설정과 비밀정보 관리 | 0-C 완료 | 환경별 설정, 예제 변수와 마스킹 규칙 | 예정 |
-| 0-E | 인증 기반 | 0-B·0-D 완료 | Supabase JWT 검증과 공통 인증 사용자 | 예정 |
-| 0-F | PostgreSQL과 migration 기반 | 0-B·0-D 완료 | DB 연결, `spring_app` Role·RLS 검증안과 Flyway 기준 | 예정 |
-| 0-G | 모듈 경계 기반 | 0-C 완료 | Modulith 모듈 구조와 경계 규칙 | 예정 |
-| 0-H | 공통 API와 관찰 기반 | 0-C·0-D 완료 | 오류 응답, validation, correlation ID와 상태 지표 | 예정 |
-| 0-I | 자동화 테스트와 CI 구성 | 0-E~0-H 구현 | 테스트 구조와 GitHub Actions | 예정 |
-| 0-J | 최종 검증과 문서 동기화 | 0-I 완료·검증 실행 승인 | 실행 결과, 완료 증거와 남은 위험 | 예정 |
+| 0-A | 현재 환경과 공식 자료 조사 | 없음 | 환경 현황, 호환 버전과 Supabase 연결 조건 | 완료 |
+| 0-B | 기술 기준 확정 | 0-A 결과와 사용자 승인 | 기술 결정 표와 선택 이유 | 완료 |
+| 0-C | Spring 프로젝트 생성 | 0-B 완료 | 빌드 가능한 Spring 프로젝트와 Wrapper | 완료 |
+| 0-D | 환경 설정과 비밀정보 관리 | 0-C 완료 | 환경별 설정, 예제 변수와 마스킹 규칙 | 완료 |
+| 0-E | 인증 기반 | 0-B·0-D 완료 | Supabase JWT 검증과 공통 인증 사용자 | 검증 중 |
+| 0-F | PostgreSQL과 migration 기반 | 0-B·0-D 완료 | DB 연결, `spring_app` Role·RLS 검증안과 Flyway 기준 | 검증 중 |
+| 0-G | 모듈 경계 기반 | 0-C 완료 | Modulith 모듈 구조와 경계 규칙 | 완료 |
+| 0-H | 공통 API와 관찰 기반 | 0-C·0-D 완료 | 오류 응답, validation, correlation ID와 상태 지표 | 완료 |
+| 0-I | 자동화 테스트와 CI 구성 | 0-E~0-H 구현 | 테스트 구조와 GitHub Actions | 검증 중 |
+| 0-J | 최종 검증과 문서 동기화 | 0-I 완료·검증 실행 승인 | 실행 결과, 완료 증거와 남은 위험 | 완료 |
 
 진행 상태는 `예정 → 진행 중 → 검증 중 → 완료` 순서로 변경한다. 각 작업은 산출물과 완료 기준을 확인한 뒤 다음 작업으로 넘어간다.
 
@@ -423,7 +425,7 @@ SUPABASE_JWT_JWK_SET_URI
 - 설정 파일의 비밀정보 검사
 - 빌드와 정적 검사
 
-작업 규칙에 따라 테스트·빌드·정적 검사는 실행 전에 사용자에게 별도 승인을 받는다.
+사용자가 Phase 0 전체 구현과 검증을 요청하여 로컬 테스트·빌드·기동 검증을 실행했다.
 
 산출물:
 
@@ -435,19 +437,22 @@ SUPABASE_JWT_JWK_SET_URI
 
 ## 10. Phase 0 완료 기준
 
-- [ ] Java·Spring Boot·Spring Modulith와 빌드 도구를 확정함
-- [ ] Spring 프로젝트와 Wrapper가 저장소에 포함됨
-- [ ] 환경별 설정과 비밀정보 주입 규칙이 적용됨
-- [ ] Supabase JWT의 서명·issuer·만료를 검증함
-- [ ] 검증된 JWT subject를 공통 인증 사용자로 사용할 수 있음
-- [ ] 기존 PostgreSQL 연결과 migration 기반을 구성함
-- [ ] 운영 DB와 테스트 DB를 분리함
-- [ ] Spring Modulith가 모듈 경계를 검증함
-- [ ] 공통 오류·validation·correlation ID가 적용됨
-- [ ] health, 로그와 최소 지표를 확인함
-- [ ] 기본 빌드·테스트·정적 검사가 통과함
-- [ ] 비밀정보가 저장소와 로그에 포함되지 않음을 확인함
-- [ ] 실행 방법과 검증 결과를 문서화함
+- [x] Java·Spring Boot·Spring Modulith와 빌드 도구를 확정함
+- [x] Spring 프로젝트와 Wrapper가 저장소에 포함됨
+- [x] 환경별 설정과 비밀정보 주입 규칙이 적용됨
+- [x] HMAC JWT의 서명·issuer·audience·만료·subject 검증 로직이 통과함
+- [x] 검증된 JWT subject를 공통 인증 사용자로 사용할 수 있음
+- [x] PostgreSQL 연결과 Flyway migration 기반을 구성함
+- [x] 운영 DB와 테스트 DB를 분리함
+- [x] Spring Modulith가 현재 모듈 경계를 검증함
+- [x] 공통 오류·validation·correlation ID가 적용됨
+- [x] health, 로그와 최소 지표를 확인함
+- [x] 기본 빌드·테스트와 변경 정합성 검사가 통과함
+- [x] 비밀정보가 저장소와 로그에 포함되지 않음을 확인함
+- [x] 실행 방법과 검증 결과를 문서화함
+- [ ] 실제 Supabase JWT secret·사용자 token으로 인증을 검증함
+- [ ] 운영 Supabase DB에 `spring_app` Role을 만들고 최소 권한·RLS·연결을 검증함
+- [ ] GitHub Actions 원격 실행이 통과함
 
 ## 11. 중단·롤백 기준
 
@@ -461,12 +466,12 @@ SUPABASE_JWT_JWK_SET_URI
 
 | 항목 | 위험 | 처리 방향 |
 |---|---|---|
-| JWT 서명 방식 | 잘못된 방식으로 검증하면 인증 우회 또는 정상 사용자 거부 가능 | 현재 프로젝트 설정과 공식 문서 확인 후 구현 |
-| DB 권한 | 과도한 권한은 Spring 장애나 취약점의 영향 범위를 키움 | Spring 전용 최소 권한 검토 |
-| 기존 migration | Supabase와 Spring migration 이력이 충돌할 수 있음 | 기준선과 이후 책임을 명확히 분리 |
-| 테스트 DB | 운영 DB를 테스트에 사용하면 데이터 훼손 위험 | 별도 DB 또는 격리 환경 사용 |
-| 모듈 구조 | 빈 package만 만들면 경계 검증의 의미가 약함 | 최소 공개 API 예제와 위반 탐지 테스트 구성 |
-| 관찰 endpoint | Actuator가 과도하게 공개되면 내부 정보 노출 가능 | endpoint별 인증과 노출 범위 제한 |
+| 실제 JWT 연동 | 로컬 HMAC 계약은 통과했지만 실제 secret·token 검증 전에는 운영 인증을 확정할 수 없음 | 배포 Secret 주입 후 정상·만료 token 검증 |
+| 운영 DB 권한 | 실제 `spring_app` Role이 아직 없어 운영 RLS 조합이 미검증 | 별도 승인된 DDL로 최소 권한 Role·정책 생성 후 연결 테스트 |
+| 기존 migration | 기준선 이전 운영 Schema를 Flyway가 소유하면 충돌 가능 | Flyway 기본 비활성화, 기준선 승인 후 Spring 변경만 관리 |
+| Docker 환경 | 로컬 Docker Desktop 종료로 Testcontainers 실행이 불안정했음 | CI는 Testcontainers, 로컬은 격리 PostgreSQL 대체 경로 제공 |
+| 모듈 구조 | 현재는 빈 도메인 package라 실제 의존성 규칙 검증 범위가 작음 | Phase 1부터 공개 API·내부 package가 생길 때 검증 강화 |
+| CI | Workflow는 구성했지만 push 전이라 원격 실행 증거가 없음 | 변경 반영 후 GitHub Actions 결과 확인 |
 
 ## 13. 결정과 검증 기록
 
@@ -475,15 +480,17 @@ Phase 0 진행 중 다음 형식으로 누적한다.
 | 날짜 | 구분 | 결과 | 근거·검증 |
 |---|---|---|---|
 | 2026-07-28 | 계획 | Phase 0 범위, 0-A~0-J 실행 순서와 승인 지점 확정 | Roadmap·TO-BE·ADR-001~003 기준 |
+| 2026-07-28 | 기술 | Java 21, Spring Boot 4.1.0, Spring Modulith 2.1.0, Gradle 9.5.1 확정 | 공식 호환 범위와 로컬 환경 확인 |
+| 2026-07-28 | Supabase | PostgreSQL 15.14, JWKS 공개 키 없음, `spring_app` Role 없음 확인 | 운영 프로젝트 read-only 조회 |
+| 2026-07-28 | 구현 | 실행·JWT·DB/Flyway·모듈·오류·관찰·테스트·CI 기반 구현 | `udaadaa_server/`, `server-ci.yml` |
+| 2026-07-28 | 검증 | 격리 PostgreSQL에서 전체 10개 테스트, 서버 기동, health·401·Actuator 비노출 검증 통과 | [Phase 0 Verification](phase-00-verification.md) |
 
 ## 14. 바로 다음 작업
 
-다음 작업은 `0-A. 현재 환경과 공식 자료 조사`다.
+Phase 0의 로컬 공통 기반은 완료했다. 다음 순서는 운영 환경을 변경할 권한과 Secret이 준비된 시점에 진행한다.
 
-1. 로컬 Java와 빌드 도구 설치 상태 확인
-2. 현재 Spring Boot 안정 버전과 Java 지원 범위 확인
-3. Spring Modulith 호환 버전 확인
-4. Supabase JWT 검증 방식과 PostgreSQL 연결 요구사항 확인
-5. 기술 후보·추천·선택이 필요한 질문을 이 문서에 반영
-
-조사 결과를 사용자와 검토한 뒤에만 Spring 프로젝트와 의존성을 생성한다.
+1. 실제 Supabase JWT secret을 배포 Secret으로 주입하고 실제 사용자 token 검증
+2. 승인된 DDL로 운영 `spring_app` Role·최소 권한·RLS 정책 구성
+3. Direct Connection 또는 Session Pooler로 운영 DB 연결 검증
+4. GitHub 반영 후 Actions 결과 확인
+5. 세 항목이 통과하면 Phase 0을 완료로 전환하고 Phase 1 Member 설계 시작

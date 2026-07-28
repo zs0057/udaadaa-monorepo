@@ -1,0 +1,2 @@
+-- Phase 0 intentionally changes no service table.
+-- This no-op migration establishes the Spring-owned Flyway version range after the legacy baseline.

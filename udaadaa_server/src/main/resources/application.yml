@@ -1,0 +1,46 @@
+spring:
+  application:
+    name: udaadaa-server
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/udaadaa}
+    username: ${DB_USERNAME:udaadaa}
+    password: ${DB_PASSWORD:}
+    hikari:
+      maximum-pool-size: ${DB_MAX_POOL_SIZE:10}
+      minimum-idle: ${DB_MIN_IDLE:2}
+      connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:3000}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+  flyway:
+    enabled: ${DB_MIGRATION_ENABLED:false}
+    baseline-on-migrate: ${DB_MIGRATION_BASELINE_ON_MIGRATE:false}
+    baseline-version: "20260728000000"
+    table: spring_schema_history
+    locations: classpath:db/migration
+
+server:
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
+app:
+  security:
+    jwt:
+      mode: ${SUPABASE_JWT_MODE:hmac}
+      issuer: ${SUPABASE_JWT_ISSUER:}
+      audience: ${SUPABASE_JWT_AUDIENCE:authenticated}
+      hmac-secret: ${SUPABASE_JWT_SECRET:}
+      jwk-set-uri: ${SUPABASE_JWT_JWK_SET_URI:}
+
+logging:
+  pattern:
+    level: "%5p [traceId:%X{traceId:-}]"

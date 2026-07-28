@@ -1,0 +1,6 @@
+spring:
+  config:
+    activate:
+      on-profile: local
+  flyway:
+    enabled: ${DB_MIGRATION_ENABLED:false}

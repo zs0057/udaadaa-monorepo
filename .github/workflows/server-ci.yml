@@ -1,0 +1,33 @@
+name: Server CI
+
+on:
+  push:
+    paths:
+      - "udaadaa_server/**"
+      - ".github/workflows/server-ci.yml"
+  pull_request:
+    paths:
+      - "udaadaa_server/**"
+      - ".github/workflows/server-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: udaadaa_server
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+      - uses: gradle/actions/wrapper-validation@v4
+      - name: Test
+        run: ./gradlew clean test --no-daemon

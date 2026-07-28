@@ -394,7 +394,7 @@ Supabase PostgreSQL, Auth와 Storage는 초기 마이그레이션에서 바로 �
 
 | 단계 | 상태 | 완료 증거 |
 |---|---|---|
-| 0. Spring 공통 기반 | 진행 중 | [Phase 0 계획](phases/phase-00-foundation.md), 이후 빌드·인증·DB·모듈 검증 결과 |
+| 0. Spring 공통 기반 | 검증 중 | [Phase 0 계획](phases/phase-00-foundation.md), [로컬 검증 결과](phases/phase-00-verification.md), 운영 JWT·DB Role·CI 검증 대기 |
 | 1. Member | 예정 | API·권한 테스트와 Flutter 전환 결과 |
 | 2. Moderation | 예정 | 차단 규칙 테스트와 단일 쓰기 확인 |
 | 3. Chat + Notification | 예정 | 채팅 E2E·복구·지연·중복 Push 검증 |
@@ -408,12 +408,4 @@ Supabase PostgreSQL, Auth와 Storage는 초기 마이그레이션에서 바로 �
 
 ## 15. 다음 작업
 
-로드맵의 첫 실행 단계는 Spring 공통 기반이다. 구현에 들어가기 전에 다음 세부 설계를 순서대로 확정한다.
-
-1. 현재 `udaadaa_server`의 Spring Boot·Java·빌드 구성 확인
-2. Spring Modulith 호환 버전과 모듈 패키지 규칙 결정
-3. Supabase JWT 검증과 Member 식별 방식 결정
-4. PostgreSQL 연결 계정·권한과 migration 도구 결정
-5. 기본 오류 응답·로그·테스트 완료 기준 결정
-
-각 항목은 실제 코드와 현재 공식 문서를 확인한 후 구현 계획으로 구체화한다.
+Phase 0의 로컬 공통 기반은 구현·검증되었다. 실제 Supabase JWT와 `spring_app` DB Role, GitHub Actions 원격 실행을 확인한 뒤 Phase 0을 완료로 전환하고 Phase 1 Member의 API·권한·데이터 비교 계획을 작성한다.
