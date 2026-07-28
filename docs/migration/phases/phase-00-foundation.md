@@ -26,7 +26,6 @@
 
 - 실제 Supabase JWT secret을 배포 환경에 주입한 뒤 실제 사용자 token 검증
 - 운영 DB의 `spring_app` 로그인 Role·최소 권한·RLS 정책 생성과 연결 검증
-- GitHub에 반영한 뒤 GitHub Actions의 원격 실행 결과
 - 실제 배포 환경과 Secret 저장 방식
 
 상세 구현·검증 결과는 [Phase 0 Verification](phase-00-verification.md)에 분리해 기록한다.
@@ -199,7 +198,7 @@ udaadaa_server/
 | 0-F | PostgreSQL과 migration 기반 | 0-B·0-D 완료 | DB 연결, `spring_app` Role·RLS 검증안과 Flyway 기준 | 검증 중 |
 | 0-G | 모듈 경계 기반 | 0-C 완료 | Modulith 모듈 구조와 경계 규칙 | 완료 |
 | 0-H | 공통 API와 관찰 기반 | 0-C·0-D 완료 | 오류 응답, validation, correlation ID와 상태 지표 | 완료 |
-| 0-I | 자동화 테스트와 CI 구성 | 0-E~0-H 구현 | 테스트 구조와 GitHub Actions | 검증 중 |
+| 0-I | 자동화 테스트와 CI 구성 | 0-E~0-H 구현 | 테스트 구조와 GitHub Actions | 완료 |
 | 0-J | 최종 검증과 문서 동기화 | 0-I 완료·검증 실행 승인 | 실행 결과, 완료 증거와 남은 위험 | 완료 |
 
 진행 상태는 `예정 → 진행 중 → 검증 중 → 완료` 순서로 변경한다. 각 작업은 산출물과 완료 기준을 확인한 뒤 다음 작업으로 넘어간다.
@@ -452,7 +451,7 @@ SUPABASE_JWT_JWK_SET_URI
 - [x] 실행 방법과 검증 결과를 문서화함
 - [ ] 실제 Supabase JWT secret·사용자 token으로 인증을 검증함
 - [ ] 운영 Supabase DB에 `spring_app` Role을 만들고 최소 권한·RLS·연결을 검증함
-- [ ] GitHub Actions 원격 실행이 통과함
+- [x] GitHub Actions 원격 실행이 통과함
 
 ## 11. 중단·롤백 기준
 
@@ -471,7 +470,7 @@ SUPABASE_JWT_JWK_SET_URI
 | 기존 migration | 기준선 이전 운영 Schema를 Flyway가 소유하면 충돌 가능 | Flyway 기본 비활성화, 기준선 승인 후 Spring 변경만 관리 |
 | Docker 환경 | 로컬 Docker Desktop 종료로 Testcontainers 실행이 불안정했음 | CI는 Testcontainers, 로컬은 격리 PostgreSQL 대체 경로 제공 |
 | 모듈 구조 | 현재는 빈 도메인 package라 실제 의존성 규칙 검증 범위가 작음 | Phase 1부터 공개 API·내부 package가 생길 때 검증 강화 |
-| CI | Workflow는 구성했지만 push 전이라 원격 실행 증거가 없음 | 변경 반영 후 GitHub Actions 결과 확인 |
+| CI Action 런타임 | Actions v4가 Node.js 20 사용 중단 경고를 표시함 | 공식 최신 major 호환성을 별도 검토한 뒤 갱신 |
 
 ## 13. 결정과 검증 기록
 
@@ -484,6 +483,7 @@ Phase 0 진행 중 다음 형식으로 누적한다.
 | 2026-07-28 | Supabase | PostgreSQL 15.14, JWKS 공개 키 없음, `spring_app` Role 없음 확인 | 운영 프로젝트 read-only 조회 |
 | 2026-07-28 | 구현 | 실행·JWT·DB/Flyway·모듈·오류·관찰·테스트·CI 기반 구현 | `udaadaa_server/`, `server-ci.yml` |
 | 2026-07-28 | 검증 | 격리 PostgreSQL에서 전체 10개 테스트, 서버 기동, health·401·Actuator 비노출 검증 통과 | [Phase 0 Verification](phase-00-verification.md) |
+| 2026-07-28 | CI | Testcontainers PostgreSQL을 사용한 GitHub Actions 통과 | [Server CI](https://github.com/zs0057/udaadaa-monorepo/actions/runs/30343831518) |
 
 ## 14. 바로 다음 작업
 
@@ -492,5 +492,4 @@ Phase 0의 로컬 공통 기반은 완료했다. 다음 순서는 운영 환경�
 1. 실제 Supabase JWT secret을 배포 Secret으로 주입하고 실제 사용자 token 검증
 2. 승인된 DDL로 운영 `spring_app` Role·최소 권한·RLS 정책 구성
 3. Direct Connection 또는 Session Pooler로 운영 DB 연결 검증
-4. GitHub 반영 후 Actions 결과 확인
-5. 세 항목이 통과하면 Phase 0을 완료로 전환하고 Phase 1 Member 설계 시작
+4. 두 운영 연동 항목이 통과하면 Phase 0을 완료로 전환하고 Phase 1 Member 설계 시작

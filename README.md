@@ -34,7 +34,7 @@ Udaadaa는 채팅과 챌린지를 통해 사용자가 건강 목표를 꾸준히
 - [ ] 기능 단위 Spring 이전 및 검증
   - [ ] **Phase 0 — Spring 공통 기반** · 검증 중
     - Spring 실행·인증·DB·모듈·오류·관찰·테스트 기반을 준비합니다.
-    - 현재 상태: 로컬 공통 기반과 10개 자동화 테스트 완료, 실제 Supabase JWT·DB Role·CI 연동 검증 대기
+    - 현재 상태: 로컬 공통 기반과 10개 자동화 테스트·GitHub Actions 완료, 실제 Supabase JWT·DB Role 연동 검증 대기
     - 상세 문서: [Phase 0 Foundation](docs/migration/phases/phase-00-foundation.md), [Phase 0 Verification](docs/migration/phases/phase-00-verification.md)
   - [ ] **Phase 1 — Member** · 예정
     - Supabase JWT 사용자와 서비스 회원을 연결하고 프로필 조회·수정을 이전합니다.

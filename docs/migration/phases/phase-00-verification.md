@@ -16,7 +16,7 @@ Spring 공통 기반을 구현하고 격리된 PostgreSQL에서 전체 테스트
 | 모듈 | 통과 | Member·Moderation·Chat·Notification·Challenge·Record·Social 경계 |
 | 공통 API | 통과 | 공통 401 JSON, correlation ID, 내부 오류 비노출 |
 | 관찰 | 통과 | Actuator health `UP`, health 외 endpoint HTTP 노출 제외 |
-| CI | 구성 완료 | GitHub Actions Workflow 작성, 원격 실행은 push 이후 확인 필요 |
+| CI | 통과 | Wrapper 검증과 Testcontainers PostgreSQL 기반 전체 테스트 통과 |
 
 ## 2. 자동화 검증
 
@@ -32,6 +32,7 @@ Spring 공통 기반을 구현하고 격리된 PostgreSQL에서 전체 테스트
 - 범위: Context 1, Modulith 1, 인증·Actuator 7, RLS 1
 - 테스트 DB: 운영과 분리된 임시 PostgreSQL 17
 - CI 기본 DB: PostgreSQL 15.14 Testcontainers
+- GitHub Actions: [Server CI 성공](https://github.com/zs0057/udaadaa-monorepo/actions/runs/30343831518)
 
 서버 기동 후 다음 결과도 직접 확인했다.
 
@@ -56,7 +57,8 @@ GET /api/v1/auth/me   → 401, 공통 오류 JSON과 X-Correlation-Id
 - 실제 Supabase JWT secret과 실제 사용자 token을 이용한 정상·만료 검증
 - 운영 `spring_app` 로그인 Role의 최소 권한, RLS 정책과 connection limit 적용
 - Direct Connection 또는 Session Pooler 연결 확인
-- GitHub Actions 원격 실행 통과
 - 배포 환경의 Secret 저장·주입 방식 확정
+
+GitHub Actions는 통과했지만 v4 Action의 Node.js 20 사용 중단 경고가 있다. 현재 실행에는 영향이 없으며, major 버전 갱신은 호환성을 별도 검토한다.
 
 이 항목은 실제 Secret 또는 운영 DDL 변경이 필요하므로 로컬 구현 완료와 분리한다. 임시 관리자 권한이나 운영 데이터 쓰기로 우회하지 않는다.

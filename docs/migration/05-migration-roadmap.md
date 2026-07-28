@@ -394,7 +394,7 @@ Supabase PostgreSQL, Auth와 Storage는 초기 마이그레이션에서 바로 �
 
 | 단계 | 상태 | 완료 증거 |
 |---|---|---|
-| 0. Spring 공통 기반 | 검증 중 | [Phase 0 계획](phases/phase-00-foundation.md), [로컬 검증 결과](phases/phase-00-verification.md), 운영 JWT·DB Role·CI 검증 대기 |
+| 0. Spring 공통 기반 | 검증 중 | [Phase 0 계획](phases/phase-00-foundation.md), [로컬·CI 검증 결과](phases/phase-00-verification.md), 운영 JWT·DB Role 검증 대기 |
 | 1. Member | 예정 | API·권한 테스트와 Flutter 전환 결과 |
 | 2. Moderation | 예정 | 차단 규칙 테스트와 단일 쓰기 확인 |
 | 3. Chat + Notification | 예정 | 채팅 E2E·복구·지연·중복 Push 검증 |
