@@ -27,7 +27,7 @@ Udaadaa는 채팅과 챌린지를 통해 사용자가 건강 목표를 꾸준히
   - 상세 문서: [Domain Boundaries](docs/migration/03-domain-boundaries.md)
 - [x] 목표 아키텍처와 주요 기술 결정 확정
   - Spring 모듈형 모놀리스, REST·STOMP, 내부 이벤트와 점진적 Schema 전환 원칙을 확정했습니다.
-  - 상세 문서: [TO-BE Architecture](docs/migration/04-to-be-architecture.md), [ADR-001 초기 기술 결정](docs/migration/adr/ADR-001-initial-technical-decisions.md), [ADR-002 인프라 기술 검토](docs/migration/adr/ADR-002-infrastructure-technical-review.md)
+  - 상세 문서: [TO-BE Architecture](docs/migration/04-to-be-architecture.md), [ADR-001 초기 기술 결정](docs/migration/adr/ADR-001-initial-technical-decisions.md), [ADR-002 인프라 기술 검토](docs/migration/adr/ADR-002-infrastructure-technical-review.md), [ADR-003 Supabase·Spring 호환성 검토](docs/migration/adr/ADR-003-supabase-spring-compatibility.md)
 - [x] 도메인별 마이그레이션 로드맵 작성
   - 공통 기반부터 Member, Moderation, Chat·Notification, Challenge, Record, Social과 의존성 제거까지의 순서와 완료·롤백 기준을 정의했습니다.
   - 상세 문서: [Migration Roadmap](docs/migration/05-migration-roadmap.md)
