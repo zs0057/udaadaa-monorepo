@@ -381,9 +381,10 @@ Supabase PostgreSQL, Auth와 Storage는 초기 마이그레이션에서 바로 �
 - [ ] 기존 기능의 정상·실패·권한 시나리오가 정리됨
 - [ ] Spring API 계약과 오류 응답이 확정됨
 - [ ] 단위·통합·권한 테스트가 통과함
+- [ ] Spring DB Role과 RLS 정책이 Spring 경로와 남아 있는 Flutter 직접 접근 경로에서 모두 올바르게 동작함
 - [ ] 기존 데이터 조회 결과와 비교 검증함
 - [ ] Schema migration과 백필 결과를 검증함
-- [ ] 쓰기 주체 전환 시점과 담당자가 정해짐
+- [ ] 기능별 단일 쓰기 주체(Flutter 또는 Spring), 최종 데이터 원본과 전환 시점이 정해짐
 - [ ] Trigger·Edge Function·Push의 중복 실행 여부를 확인함
 - [ ] 로그·지표·알림으로 전환 결과를 관찰할 수 있음
 - [ ] 롤백 가능 조건과 불가능 조건을 확인함
