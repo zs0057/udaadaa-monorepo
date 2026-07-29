@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:15.14-alpine
+    container_name: udaadaa-local-postgres
+    environment:
+      POSTGRES_DB: udaadaa
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: local-postgres-admin
+    ports:
+      - "55432:5432"
+    volumes:
+      - udaadaa-local-postgres-data:/var/lib/postgresql/data
+      - ./local/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d udaadaa"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  udaadaa-local-postgres-data:

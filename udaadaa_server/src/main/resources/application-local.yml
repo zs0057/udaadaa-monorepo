@@ -2,5 +2,17 @@ spring:
   config:
     activate:
       on-profile: local
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:55432/udaadaa}
+    username: ${DB_USERNAME:udaadaa}
+    password: ${DB_PASSWORD:local-udaadaa-password}
   flyway:
     enabled: ${DB_MIGRATION_ENABLED:false}
+
+app:
+  security:
+    jwt:
+      mode: ${SUPABASE_JWT_MODE:hmac}
+      issuer: ${SUPABASE_JWT_ISSUER:https://local.udaadaa.test/auth/v1}
+      audience: ${SUPABASE_JWT_AUDIENCE:authenticated}
+      hmac-secret: ${SUPABASE_JWT_SECRET:local-only-jwt-secret-change-before-shared-use}
