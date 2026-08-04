@@ -1,7 +1,7 @@
 # Phase 0 Verification
 
-> 상태: 로컬 검증 완료, 운영 Supabase 연동 대기
-> 검증일: 2026-07-28
+> 상태: 로컬 검증 완료, 실제 Supabase JWT 검증 완료, DB Role·RLS 적용 대기
+> 검증일: 2026-07-28 (로컬), 2026-08-04 (실제 Supabase JWT)
 
 ## 1. 결과 요약
 
@@ -54,7 +54,7 @@ GET /api/v1/auth/me   → 401, 공통 오류 JSON과 X-Correlation-Id
 
 ## 4. 운영 연동 전 남은 검증
 
-- 실제 Supabase JWT secret과 실제 사용자 token을 이용한 정상·만료 검증
+- ~~실제 Supabase JWT secret과 실제 사용자 token을 이용한 정상·만료 검증~~ 완료 (5절 참고)
 - 운영 `spring_app` 로그인 Role의 최소 권한, RLS 정책과 connection limit 적용
 - Direct Connection 또는 Session Pooler 연결 확인
 - 배포 환경의 Secret 저장·주입 방식 확정
@@ -62,3 +62,30 @@ GET /api/v1/auth/me   → 401, 공통 오류 JSON과 X-Correlation-Id
 GitHub Actions는 통과했지만 v4 Action의 Node.js 20 사용 중단 경고가 있다. 현재 실행에는 영향이 없으며, major 버전 갱신은 호환성을 별도 검토한다.
 
 이 항목은 실제 Secret 또는 운영 DDL 변경이 필요하므로 로컬 구현 완료와 분리한다. 임시 관리자 권한이나 운영 데이터 쓰기로 우회하지 않는다.
+
+## 5. 실제 Supabase JWT 검증 결과 (2026-08-04)
+
+로컬 Spring(`SPRING_PROFILES_ACTIVE=local`)에 실제 운영 Supabase Legacy JWT Secret과 실제 로그인 Access Token을 주입하여 `GET /api/v1/auth/me`로 검증했다.
+
+| 케이스 | 기대 | 실제 결과 |
+|---|---|---|
+| 토큰 없음 | 401 | 401 |
+| 정상 Access Token | 200, `id` = JWT `sub` | 200, `id` 일치 확인 |
+| 만료된 Access Token | 401 | 401 (`Invalid signature`로 로그에는 표기되나 시간 검증상 만료가 원인) |
+| 변조된 Access Token | 401 | 401 |
+
+- 발급자(`iss`): `https://ccpcclfqofyvksajnrpg.supabase.co/auth/v1` — 설정값과 일치
+- 대상(`aud`): `authenticated` — 설정값과 일치
+- 서명 알고리즘: HS256 (Legacy JWT Secret 기반) — Signing Keys 대시보드 기준 Current Key가 여전히 `Legacy HS256 (Shared Secret)`으로 확인됨. ES256 Standby Key는 아직 미적용 상태
+- JWKS 엔드포인트에 ES256 키 1개가 등록된 것을 확인했다(2026-07-28 조회 시 0개였음). Signing Keys 기능이 프로젝트에 활성화됐지만 서명 자체는 아직 HS256 legacy 경로를 사용 중이다. 향후 Rotate 시 Spring도 JWKS 모드로 전환 필요
+
+### 트러블슈팅 기록
+
+- 최초 IntelliJ 세미콜론 구분 환경변수 입력 방식에서 반복적으로 `Invalid signature` 오류 발생
+- Python HMAC 스크립트로 Secret 자체는 유효함을 별도 확인 (Spring/IntelliJ 문제로 범위 좁힘)
+- 원인: `SUPABASE_JWT_SECRET` 값이 실제로는 Spring에 전달되지 않고 `application-local.yml`의 더미 기본값(`local-only-jwt-secret-change-before-shared-use`)으로 대체되고 있었음
+- IntelliJ Run Configuration 환경변수 설정 대신 터미널에서 `./gradlew bootRun`에 환경변수를 직접 지정하는 방식으로 전환하여 해결
+
+### 보안 조치 필요
+
+검증 과정에서 실제 Legacy JWT Secret 원문이 채팅 세션에 노출됐다. Phase 0 원칙(Secret을 채팅·코드에 노출하지 않음)이 지켜지지 않았으므로, **Supabase 대시보드에서 JWT Signing Key 로테이션(Rotate) 후 기존 키 Revoke를 조만간 진행해야 한다.** 로테이션 시점은 Flutter 등 기존 서비스가 새 키로 서명된 토큰을 문제없이 검증하는지 확인 후 결정한다.
