@@ -32,9 +32,9 @@ Udaadaa는 채팅과 챌린지를 통해 사용자가 건강 목표를 꾸준히
   - 공통 기반부터 Member, Moderation, Chat·Notification, Challenge, Record, Social과 의존성 제거까지의 순서와 완료·롤백 기준을 정의했습니다.
   - 상세 문서: [Migration Roadmap](docs/migration/05-migration-roadmap.md)
 - [ ] 기능 단위 Spring 이전 및 검증
-  - [ ] **Phase 0 — Spring 공통 기반** · 검증 중
+  - [ ] **Phase 0 — Spring 공통 기반** · 완료 기준 충족, Secret 정리 대기
     - Spring 실행·인증·DB·모듈·오류·관찰·테스트 기반을 준비합니다.
-    - 현재 상태: 로컬 공통 기반과 10개 자동화 테스트·GitHub Actions 완료, 실제 Supabase JWT·DB Role 연동 검증 대기
+    - 현재 상태: 로컬 공통 기반, 실제 Supabase JWT 검증, spring_app DB Role 연동 검증까지 완료. 노출된 Secret 로테이션과 배포 Secret 관리 방식 확정 후 최종 완료 처리 예정
     - 상세 문서: [Phase 0 Foundation](docs/migration/phases/phase-00-foundation.md), [Phase 0 Verification](docs/migration/phases/phase-00-verification.md)
   - [ ] **Phase 1 — Member** · 진행 중
     - Supabase JWT 사용자와 서비스 회원을 연결하고 프로필 조회·수정을 이전합니다.
