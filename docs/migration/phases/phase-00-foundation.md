@@ -341,6 +341,25 @@ SUPABASE_JWT_JWK_SET_URI
 - migration 적용 대상과 실행 환경이 명확함
 - 연결 비밀번호가 저장소와 로그에 없음
 
+#### spring_app Role 설계 (2026-08-04, SQL 작성만 완료·운영 미적용)
+
+| 결정 항목 | 결정 |
+|---|---|
+| Role 종류 | `LOGIN` Role, `NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT` |
+| RLS 처리 | `BYPASSRLS` 적용. Supabase RLS는 `auth.uid()` 기반이라 Spring의 JWT 인증 컨텍스트와 맞지 않으므로, 행 단위 권한은 Spring 애플리케이션 계층(JWT `sub` 검증)이 책임진다. 기존 `authenticated`/RLS는 Flutter 직접 접근 경로에 그대로 유지한다 |
+| 권한 범위 | Phase 1 범위인 `public.profiles`에 `SELECT, INSERT, UPDATE`만 부여. `DELETE` 제외(회원 탈퇴는 별도 Phase에서 재검토). 이후 Phase가 필요로 하는 테이블은 해당 Phase 문서에서 추가 `GRANT`로 확장 |
+| Connection Limit | 15 (Spring HikariCP `maximum-pool-size` 기본 10보다 여유 있게 설정) |
+| 연결 방식 | IPv6 지원 여부에 따라 Direct Connection(5432) 또는 Session Pooler(5432) 사용. Transaction Pooler(6543)는 Hibernate Prepared Statement와 충돌 가능하여 제외 |
+| 비밀번호 | SQL 파일에 값을 넣지 않는다. 적용 시점에 별도로 생성하여 Secret 관리 도구에 저장한다 |
+
+산출물 (Spring 운영 admin 스크립트로 분류하여 `docs/`가 아닌 `udaadaa_server/scripts/db-admin/`에 보관):
+
+- [`spring_app Role 생성 SQL`](../../../udaadaa_server/scripts/db-admin/phase-00-spring-app-role-create.sql)
+- [`spring_app Role 롤백 SQL`](../../../udaadaa_server/scripts/db-admin/phase-00-spring-app-role-rollback.sql)
+- [`profiles RLS 보완 SQL(선택)`](../../../udaadaa_server/scripts/db-admin/phase-00-profiles-rls-hardening.sql) — `UPDATE` 정책에 `WITH CHECK` 추가, 정책 대상을 `public`에서 `authenticated`로 명확화. spring_app 도입과 무관하게 Flutter 직접 쓰기 경로의 기존 취약점을 보완하는 별도 변경이라 승인 후 개별 적용
+
+이 SQL은 검토용으로만 작성했으며 운영 DB에는 적용하지 않았다. 적용은 Task #3(운영 DB Role 적용 및 연결 검증)에서 별도 승인 후 진행한다.
+
 ### 0-G. 모듈 경계 기반
 
 작업:
@@ -449,8 +468,8 @@ SUPABASE_JWT_JWK_SET_URI
 - [x] 기본 빌드·테스트와 변경 정합성 검사가 통과함
 - [x] 비밀정보가 저장소와 로그에 포함되지 않음을 확인함
 - [x] 실행 방법과 검증 결과를 문서화함
-- [ ] 실제 Supabase JWT secret·사용자 token으로 인증을 검증함
-- [ ] 운영 Supabase DB에 `spring_app` Role을 만들고 최소 권한·RLS·연결을 검증함
+- [x] 실제 Supabase JWT secret·사용자 token으로 인증을 검증함
+- [ ] 운영 Supabase DB에 `spring_app` Role을 만들고 최소 권한·RLS·연결을 검증함 (생성·롤백 SQL 작성 완료, 운영 적용 대기)
 - [x] GitHub Actions 원격 실행이 통과함
 
 ## 11. 중단·롤백 기준
@@ -484,6 +503,8 @@ Phase 0 진행 중 다음 형식으로 누적한다.
 | 2026-07-28 | 구현 | 실행·JWT·DB/Flyway·모듈·오류·관찰·테스트·CI 기반 구현 | `udaadaa_server/`, `server-ci.yml` |
 | 2026-07-28 | 검증 | 격리 PostgreSQL에서 전체 10개 테스트, 서버 기동, health·401·Actuator 비노출 검증 통과 | [Phase 0 Verification](phase-00-verification.md) |
 | 2026-07-28 | CI | Testcontainers PostgreSQL을 사용한 GitHub Actions 통과 | [Server CI](https://github.com/zs0057/udaadaa-monorepo/actions/runs/30343831518) |
+| 2026-08-04 | 실제 연동 | 운영 Supabase Legacy JWT Secret과 실제 Access Token으로 정상·만료·변조·무토큰 4개 케이스 검증 통과 | [Phase 0 Verification §5](phase-00-verification.md#5-실제-supabase-jwt-검증-결과-2026-08-04) |
+| 2026-08-04 | 설계 | spring_app Role(BYPASSRLS, profiles 최소 권한) 생성·롤백 SQL과 profiles RLS 보완 SQL 작성. 운영 미적용 | [spring_app Role 설계](#spring_app-role-설계-2026-08-04-sql-작성만-완료운영-미적용) |
 
 ## 14. 바로 다음 작업
 
