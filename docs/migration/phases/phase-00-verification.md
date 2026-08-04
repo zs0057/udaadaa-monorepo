@@ -140,9 +140,9 @@ Transaction Pooler(6543)는 Hibernate Prepared Statement와 충돌 가능성이 
 
 이번 Phase 0 실제 연동 검증 과정에서 아래 2개 Secret이 채팅 세션에 노출됐다. 즉시 서비스 장애로 이어지진 않지만, 다음 유지보수 시점에 정리한다.
 
-| Secret | 노출 시점 | 필요 조치 |
-|---|---|---|
-| Supabase Legacy JWT Secret | JWT 검증 트러블슈팅 중 | Signing Key 로테이션 후 기존 키 Revoke (Edge Function 5개 동시 업데이트 필요, 6절 참고) |
-| `spring_app` DB Role 비밀번호 | DB 연결 트러블슈팅 중 | `ALTER ROLE spring_app WITH PASSWORD '새값'`로 교체, Spring 배포 환경 변수도 동기화 |
+| Secret | 노출 시점 | 필요 조치 | 상태 |
+|---|---|---|---|
+| Supabase Legacy JWT Secret | JWT 검증 트러블슈팅 중 | Signing Key 로테이션 후 기존 키 Revoke (Edge Function 5개 동시 업데이트 필요, 6절 참고) | 보류 (2026-08-04, 운영 트래픽 사실상 중단 수준이라 즉시 위험 낮음으로 판단) |
+| `spring_app` DB Role 비밀번호 | DB 연결 트러블슈팅 중 | `ALTER ROLE spring_app WITH PASSWORD '새값'`로 교체, Spring 배포 환경 변수도 동기화 | 보류 (2026-08-04, Edge Function 의존성 없어 우선순위 높게 별도 예정) |
 
-두 조치 모두 Task #4(배포 환경 Secret 관리 방식 확정)와 함께 계획한다.
+두 조치 모두 실제 로테이션 전까지 미해결 리스크로 남기며, 트래픽 재개 시점 또는 Phase 1 Flutter 전환 착수 전 처리한다.

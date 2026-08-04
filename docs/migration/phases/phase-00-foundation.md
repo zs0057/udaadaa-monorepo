@@ -293,6 +293,30 @@ SUPABASE_JWT_JWK_SET_URI
 - local·test 설정이 운영 설정을 덮어쓰지 않음
 - 설정 누락 시 원인을 알 수 있는 오류가 발생함
 
+#### Secret 관리 원칙 (2026-08-04)
+
+배포 플랫폼(AWS 등)은 아직 확정 전이므로, 플랫폼 결정과 무관하게 지금 적용 가능한 원칙만 정한다. 플랫폼별 Secret 관리 도구(AWS Secrets Manager 등) 연동은 배포 인프라 ADR에서 별도로 다룬다.
+
+| 환경 | 주입 방식 |
+|---|---|
+| 로컬 개발 | 터미널에서 `./gradlew bootRun` 실행 시 환경변수로 직접 전달. IntelliJ Run Configuration의 세미콜론 구분 입력 필드는 특수문자 포함 값에서 파싱 오류가 재현되어 권장하지 않음 (2026-08-04 트러블슈팅 기록 참고) |
+| CI (GitHub Actions) | 저장소 Secret 없이 Testcontainers 임시 자격 증명만 사용. 실제 Secret 주입 없음 |
+| 운영 배포 | 배포 플랫폼 확정 시 해당 플랫폼의 Secret 관리 도구로 주입. 결정 전까지는 실제 배포를 진행하지 않음 |
+
+공통 규칙:
+
+- 실제 Secret 값은 저장소, 문서, 채팅 세션 어디에도 원문으로 남기지 않는다.
+- Secret이 실수로 노출되면 즉시 로테이션하고 노출 시점·범위를 검증 문서에 기록한다 (아래 대응 기록 참고).
+- SQL 스크립트(`scripts/db-admin/`)에는 비밀번호를 플레이스홀더로만 남기고, 실행 시점에 대시보드에서 직접 교체한다.
+
+#### 노출 대응 기록
+
+2026-08-04 실제 Supabase 연동 검증 중 트러블슈팅 과정에서 Legacy JWT Secret과 `spring_app` DB 비밀번호가 채팅 세션에 노출됐다.
+
+**로테이션 보류 결정 (2026-08-04):** 현재 운영 트래픽이 사실상 중단 수준이라 즉시 위험도가 낮다고 판단하여 로테이션을 지금 진행하지 않는다. 단, JWT Secret 로테이션은 `reaction-push`, `message-push`, `get-room-id-by-name`, `post-initial-chat-data`, `delete-auth-user` Edge Function 5개의 동시 업데이트가 필요해 단독 작업이 아니므로, 실제 트래픽이 다시 늘어나기 전 또는 Phase 1 Flutter 전환 착수 전 별도 작업으로 예정한다. `spring_app` DB 비밀번호는 Edge Function 의존성이 없어 더 가볍게 로테이션 가능하므로 우선순위를 높게 둔다.
+
+미해결 상태로 [Phase 0 Verification §7](phase-00-verification.md#7-노출된-secret-정리-필요-목록)에 추적한다.
+
 ### 0-E. 인증 기반
 
 작업:
