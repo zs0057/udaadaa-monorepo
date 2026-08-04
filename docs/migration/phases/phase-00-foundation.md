@@ -1,7 +1,10 @@
 # Phase 0: Spring Foundation
 
-> 상태: 완료 기준 전체 충족 (실제 Supabase JWT·spring_app DB Role 연동 검증 완료). 노출된 Secret 로테이션·배포 Secret 관리 방식 확정 후 최종 완료 처리
+> 상태: 완료
 > 시작일: 2026-07-28
+> 완료일: 2026-08-04
+>
+> 완료 후에도 남아있는 리스크: 검증 과정에서 노출된 JWT Secret·`spring_app` DB 비밀번호 로테이션을 보류 중 (근거: [노출 대응 기록](#노출-대응-기록), [Phase 0 Verification §7](phase-00-verification.md#7-노출된-secret-정리-필요-목록)). Phase 게이트로 취급하지 않고 별도 추적한다.
 
 ## 1. 문서 목적
 
@@ -530,10 +533,13 @@ Phase 0 진행 중 다음 형식으로 누적한다.
 | 2026-08-04 | 실제 연동 | 운영 Supabase Legacy JWT Secret과 실제 Access Token으로 정상·만료·변조·무토큰 4개 케이스 검증 통과 | [Phase 0 Verification §5](phase-00-verification.md#5-실제-supabase-jwt-검증-결과-2026-08-04) |
 | 2026-08-04 | 설계 | spring_app Role(BYPASSRLS, profiles 최소 권한) 생성·롤백 SQL과 profiles RLS 보완 SQL 작성. 운영 미적용 | [spring_app Role 설계](#spring_app-role-설계-2026-08-04-sql-작성만-완료운영-미적용) |
 | 2026-08-04 | 실제 연동 | spring_app Role을 운영 DB에 생성하고 Session Pooler로 연결. Member API의 INSERT·UPDATE·SELECT를 실제 운영 DB에서 검증 통과 | [Phase 0 Verification §6](phase-00-verification.md#6-spring_app-db-role-실제-적용연결-검증-결과-2026-08-04) |
+| 2026-08-04 | 결정 | 배포 플랫폼 미확정 상태에서 적용 가능한 Secret 관리 원칙 확정. 노출된 Secret 2건은 운영 트래픽 낮음을 근거로 로테이션 보류, 별도 추적 | [노출 대응 기록](#노출-대응-기록) |
+| 2026-08-04 | 검증 | 전체 자동 테스트 재실행(`clean test`, `check`) 통과, 회귀 없음 확인 | [Phase 0 Verification §8](phase-00-verification.md#8-최종-자동-테스트-재실행-2026-08-04) |
+| 2026-08-04 | 완료 | Phase 0 완료 기준 전 항목 충족. README·Roadmap 상태 갱신 | 이 문서 10절, [README](../../../README.md), [Roadmap](../05-migration-roadmap.md) |
 
 ## 14. 바로 다음 작업
 
-Phase 0의 완료 기준 항목은 모두 충족했다. 남은 것은 검증 과정에서 채팅에 노출된 Secret 2개(JWT Legacy Secret, spring_app DB 비밀번호) 로테이션과 배포 환경 Secret 관리 방식 확정이며, 이후 Phase 1의 Flutter 전환 작업으로 넘어간다.
+Phase 0을 완료했다. 남은 미해결 항목(Secret 로테이션 2건)은 Phase 게이트가 아닌 별도 추적 리스크로 관리하며, 다음은 Phase 1의 Flutter 전환 작업(기존 `profiles`와 Spring 조회 결과 비교 → Flutter 읽기 전환 → Flutter 쓰기 전환 → Supabase 직접 쓰기 제거)이다.
 
 1. 실제 Supabase JWT secret을 배포 Secret으로 주입하고 실제 사용자 token 검증
 2. 승인된 DDL로 운영 `spring_app` Role·최소 권한·RLS 정책 구성

@@ -396,7 +396,7 @@ Supabase PostgreSQL, Auth와 Storage는 초기 마이그레이션에서 바로 �
 
 | 단계 | 상태 | 완료 증거 |
 |---|---|---|
-| 0. Spring 공통 기반 | 검증 중 | [Phase 0 계획](phases/phase-00-foundation.md), [로컬·CI 검증 결과](phases/phase-00-verification.md), 운영 JWT·DB Role 검증 대기 |
+| 0. Spring 공통 기반 | 완료 | [Phase 0 계획](phases/phase-00-foundation.md), [검증 결과](phases/phase-00-verification.md) — 실제 Supabase JWT·spring_app DB Role 연동 검증 완료 |
 | 1. Member | 진행 중 | [Phase 1 계획](phases/phase-01-member.md), [로컬 구현·검증 결과](progress/2026-07-29-phase-01-progress.md), 실제 Supabase 비교·Flutter 전환 대기 |
 | 2. Moderation | 예정 | 차단 규칙 테스트와 단일 쓰기 확인 |
 | 3. Chat + Notification | 예정 | 채팅 E2E·복구·지연·중복 Push 검증 |
@@ -410,4 +410,4 @@ Supabase PostgreSQL, Auth와 Storage는 초기 마이그레이션에서 바로 �
 
 ## 15. 다음 작업
 
-Phase 0의 로컬 공통 기반과 Phase 1 Member API는 구현·검증되었다. 다음으로 실제 Supabase JWT와 `spring_app` DB Role·RLS를 검증하고, 기존 `profiles`와 Spring 조회 결과를 비교한 뒤 Flutter의 Profile 읽기와 쓰기를 순서대로 전환한다.
+Phase 0(공통 기반, 실제 Supabase JWT·spring_app DB Role 연동 검증)는 완료했다. 다음으로 기존 `profiles`와 Spring 조회 결과를 비교하고, Flutter의 Profile 읽기와 쓰기를 순서대로 전환한다 (Phase 1).

@@ -1,7 +1,7 @@
 # Phase 0 Verification
 
-> 상태: 로컬 검증 완료, 실제 Supabase JWT·DB Role 연동 검증 완료
-> 검증일: 2026-07-28 (로컬), 2026-08-04 (실제 Supabase JWT·DB Role)
+> 상태: 완료 — 로컬·실제 Supabase JWT·DB Role 검증 모두 통과, 전체 자동 테스트 재실행 통과
+> 검증일: 2026-07-28 (로컬), 2026-08-04 (실제 Supabase JWT·DB Role, 최종 자동 테스트)
 
 ## 1. 결과 요약
 
@@ -146,3 +146,18 @@ Transaction Pooler(6543)는 Hibernate Prepared Statement와 충돌 가능성이 
 | `spring_app` DB Role 비밀번호 | DB 연결 트러블슈팅 중 | `ALTER ROLE spring_app WITH PASSWORD '새값'`로 교체, Spring 배포 환경 변수도 동기화 | 보류 (2026-08-04, Edge Function 의존성 없어 우선순위 높게 별도 예정) |
 
 두 조치 모두 실제 로테이션 전까지 미해결 리스크로 남기며, 트래픽 재개 시점 또는 Phase 1 Flutter 전환 착수 전 처리한다.
+
+## 8. 최종 자동 테스트 재실행 (2026-08-04)
+
+실제 Supabase JWT·DB Role 검증을 마친 뒤, 전체 자동 테스트를 다시 실행해 회귀가 없는지 확인했다.
+
+```bash
+./gradlew clean test --no-daemon
+./gradlew check --no-daemon
+```
+
+- 결과: 두 명령 모두 `BUILD SUCCESSFUL`
+- 실행 환경: 로컬 Docker Testcontainers PostgreSQL (운영 DB와 분리)
+- 이번 실행에서 코드 변경은 없었으며(문서·SQL 스크립트만 추가), 회귀 확인 목적으로 재실행함
+
+이로써 Phase 0의 모든 완료 기준을 충족했다.
