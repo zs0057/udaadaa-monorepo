@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:udaadaa/data/member_api_client.dart';
 import 'package:udaadaa/models/profile.dart';
 import 'package:udaadaa/utils/constant.dart';
 
@@ -21,13 +22,9 @@ class AuthCubit extends Cubit<AuthState> {
   AuthCubit() : super(AuthInitial()) {
     final currentUser = supabase.auth.currentUser;
     if (currentUser != null) {
-      supabase
-          .from('profiles')
-          .select()
-          .eq('id', currentUser.id)
-          .single()
-          .then((res) {
-        final profile = Profile.fromMap(map: res);
+      memberApiClient.getMe().then((res) {
+        final profile = Profile.fromSpringMap(map: res)
+            .withPreservedNotificationFields(_profile);
         _profile = profile;
         emit(Authenticated(profile));
         FirebaseMessaging.instance.onTokenRefresh.listen((token) {
@@ -47,14 +44,11 @@ class AuthCubit extends Cubit<AuthState> {
           final provider = data.session?.user.appMetadata['provider'];
           if (provider == 'kakao' || provider == 'apple') {
             try {
-              final existing = await supabase
-                  .from('profiles')
-                  .select()
-                  .eq('id', supabase.auth.currentUser!.id)
-                  .maybeSingle();
+              final existing = await memberApiClient.getMeOrNull();
 
               if (existing != null) {
-                _profile = Profile.fromMap(map: existing);
+                _profile = Profile.fromSpringMap(map: existing)
+                    .withPreservedNotificationFields(_profile);
                 emit(Authenticated(_profile!));
               } else {
                 makeProfile();
@@ -85,71 +79,15 @@ class AuthCubit extends Cubit<AuthState> {
         throw Exception('Failed to sign in');
       }
 
-      Profile profile = Profile(
-        id: response.user!.id,
-        nickname: RandomNicknameGenerator.generateNickname(),
-        pushOption: true,
-      );
-
-      bool insertSuccess = false;
-      int retryCount = 0;
-      const maxRetries = 3; // 원하는 만큼 재시도 횟수를 설정
-
-      while (!insertSuccess && retryCount < maxRetries) {
-        try {
-          final res = await supabase
-              .from('profiles')
-              .insert(profile.toMap())
-              .select()
-              .single();
-
-          profile = Profile.fromMap(map: res);
-          _profile = profile;
-          emit(Authenticated(profile));
-          insertSuccess = true; // 성공적으로 삽입된 경우 루프를 탈출
-          FirebaseMessaging.instance.onTokenRefresh.listen((token) {
-            _updateFCMToken(token, profile);
-          });
-        } catch (error) {
-          logger.d("error: $error");
-          // UNIQUE 제약 조건 위반 시 새로운 닉네임을 생성하고 다시 시도
-          if (error is PostgrestException && error.code == '23505') {
-            //먼저 있나 확인
-            final existing = await supabase
-                .from('profiles')
-                .select()
-                .eq('id', response.user!.id)
-                .maybeSingle();
-
-            if (existing != null) {
-              Profile profile = Profile.fromMap(map: existing);
-              _profile = profile;
-              emit(Authenticated(profile));
-              logger.d("중복 찾았음 그걸로 들어감");
-              return;
-            }
-            // 23505는 PostgreSQL에서 고유 제약 조건 위반에 대한 에러 코드입니다.
-            logger.d("Nickname ${profile.nickname} already exists");
-            logger.d("id ${profile.id} already exists");
-            profile = profile.copyWith(
-              nickname: RandomNicknameGenerator.generateNickname(),
-            );
-            _profile = profile;
-            retryCount++;
-          } else {
-            // 다른 오류에 대한 처리
-            logger.e(error.toString());
-            break; // 반복을 중지하고 에러 처리를 할 수 있습니다.
-          }
-        }
-      }
-
-      if (!insertSuccess) {
-        // 최종적으로 실패한 경우에 대한 처리 (예: 에러 메시지 표시)
-        logger.e('Failed to insert profile');
-        emit(AuthError());
-        // 필요에 따라 추가 처리 (예: 사용자에게 알림, 다른 로직 시도 등)
-      }
+      // 닉네임 생성·중복 처리는 Spring이 담당한다 (멱등 초기화 API).
+      final res = await memberApiClient.initialize();
+      final profile = Profile.fromSpringMap(map: res)
+          .withPreservedNotificationFields(_profile);
+      _profile = profile;
+      emit(Authenticated(profile));
+      FirebaseMessaging.instance.onTokenRefresh.listen((token) {
+        _updateFCMToken(token, profile);
+      });
     } catch (e) {
       logger.e(e.toString());
       emit(AuthError());
@@ -205,17 +143,9 @@ class AuthCubit extends Cubit<AuthState> {
 
   Future<void> updateNickname(String nickname) async {
     try {
-      final currentUser = supabase.auth.currentUser;
-      if (currentUser == null) {
-        throw Exception('User is not authenticated');
-      }
-      final res = await supabase
-          .from('profiles')
-          .update({'nickname': nickname})
-          .eq('id', currentUser.id)
-          .select()
-          .single();
-      Profile profile = Profile.fromMap(map: res);
+      final res = await memberApiClient.updateMe(nickname: nickname);
+      final profile = Profile.fromSpringMap(map: res)
+          .withPreservedNotificationFields(_profile);
       _profile = profile;
       emit(Authenticated(profile));
     } catch (e) {
@@ -298,14 +228,12 @@ class AuthCubit extends Cubit<AuthState> {
       }
       final currentUser = supabase.auth.currentUser;
       logger.d("currentUser: $currentUser");
-      if (_profile != null || _profile!.id != currentUser!.id) {
-        final res = await supabase
-            .from('profiles')
-            .select()
-            .eq('id', currentUser!.id)
-            .single();
-        Profile profile = Profile.fromMap(map: res);
-        _profile = profile;
+      if (_profile == null || _profile!.id != currentUser!.id) {
+        final res = await memberApiClient.getMeOrNull();
+        if (res != null) {
+          _profile = Profile.fromSpringMap(map: res)
+              .withPreservedNotificationFields(_profile);
+        }
       }
       emit(Authenticated(_profile!));
       return 3;
@@ -406,15 +334,11 @@ class AuthCubit extends Cubit<AuthState> {
 
       if (provider == 'kakao' || provider == 'apple') {
         try {
-          final existing = await supabase
-              .from('profiles')
-              .select()
-              .eq('id', userId!)
-              .maybeSingle();
+          final existing = await memberApiClient.getMeOrNull();
 
           if (existing != null) {
-            Profile profile = Profile.fromMap(map: existing);
-            _profile = profile.copyWith();
+            _profile = Profile.fromSpringMap(map: existing)
+                .withPreservedNotificationFields(_profile);
             emit(Authenticated(_profile!));
           } else {
             await makeProfile(); // 👈 생성 시 유저 정보 넘겨줌
@@ -437,69 +361,19 @@ class AuthCubit extends Cubit<AuthState> {
     if (_profile?.id == supabase.auth.currentUser!.id) {
       return;
     }
-    Profile profile = Profile(
-      id: supabase.auth.currentUser!.id,
-      nickname: RandomNicknameGenerator.generateNickname(),
-      pushOption: true,
-    );
-
-    bool insertSuccess = false;
-    int retryCount = 0;
-    const maxRetries = 5; // 원하는 만큼 재시도 횟수를 설정
-
-    while (!insertSuccess && retryCount < maxRetries) {
-      try {
-        final res = await supabase
-            .from('profiles')
-            .insert(profile.toMap())
-            .select()
-            .single();
-
-        profile = Profile.fromMap(map: res);
-
-        //변경을 감지하려고 객체 새로생성
-        _profile = profile.copyWith();
-        emit(Authenticated(profile));
-        insertSuccess = true; // 성공적으로 삽입된 경우 루프를 탈출
-        FirebaseMessaging.instance.onTokenRefresh.listen((token) {
-          _updateFCMToken(token, profile);
-        });
-      } catch (error) {
-        // UNIQUE 제약 조건 위반 시 새로운 닉네임을 생성하고 다시 시도
-        // 이게 핵심
-        final existing = await supabase
-            .from('profiles')
-            .select()
-            .eq('id', supabase.auth.currentUser!.id)
-            .maybeSingle();
-
-        if (existing != null) {
-          _profile = Profile.fromMap(map: existing);
-          emit(Authenticated(_profile!));
-          return;
-        }
-        if (error is PostgrestException && error.code == '23505') {
-          // 23505는 PostgreSQL에서 고유 제약 조건 위반에 대한 에러 코드입니다.
-          logger.d("Nickname ${profile.nickname} already exists");
-          logger.d("id ${profile.id} already exists");
-          profile = profile.copyWith(
-            nickname: RandomNicknameGenerator.generateNickname(),
-          );
-          _profile = profile;
-          retryCount++;
-        } else {
-          // 다른 오류에 대한 처리
-          logger.e(error.toString());
-          break; // 반복을 중지하고 에러 처리를 할 수 있습니다.
-        }
-      }
-    }
-
-    if (!insertSuccess) {
-      // 최종적으로 실패한 경우에 대한 처리 (예: 에러 메시지 표시)
-      logger.e('Failed to insert profile');
+    try {
+      // 닉네임 생성·중복 처리는 Spring이 담당한다 (멱등 초기화 API).
+      final res = await memberApiClient.initialize();
+      final profile = Profile.fromSpringMap(map: res)
+          .withPreservedNotificationFields(_profile);
+      _profile = profile;
+      emit(Authenticated(profile));
+      FirebaseMessaging.instance.onTokenRefresh.listen((token) {
+        _updateFCMToken(token, profile);
+      });
+    } catch (error) {
+      logger.e('Failed to initialize member profile: ${error.toString()}');
       emit(AuthError());
-      // 필요에 따라 추가 처리 (예: 사용자에게 알림, 다른 로직 시도 등)
     }
   }
 
@@ -535,21 +409,16 @@ class AuthCubit extends Cubit<AuthState> {
     final parsedHeight = double.tryParse(height);
     final parsedWeight = double.tryParse(weight);
 
-    _profile = _profile?.copyWith(
-      height: parsedHeight,
-      weight: parsedWeight,
-    );
-
-    // Update profile in Supabase
-    if (_profile != null) {
-      try {
-        await supabase.from('profiles').update({
-          'height': parsedHeight,
-          'weight': parsedWeight,
-        }).eq('id', _profile!.id);
-      } catch (e) {
-        logger.e('Error updating profile in Supabase: ${e.toString()}');
-      }
+    try {
+      final res = await memberApiClient.updateMe(
+        height: parsedHeight,
+        weight: parsedWeight,
+      );
+      _profile = Profile.fromSpringMap(map: res)
+          .withPreservedNotificationFields(_profile);
+    } catch (e) {
+      // 예: 서버 검증 범위(50~250cm, 20~500kg)를 벗어나면 여기서 실패한다.
+      logger.e('Error updating profile via Spring: ${e.toString()}');
     }
     emit(Authenticated(_profile!));
   }

@@ -1,8 +1,8 @@
 # Phase 1: Member Migration
 
-> 상태: 구현 중 (Spring 코드·로컬 통합 검증 완료, 실제 Supabase 비교·Flutter 전환 대기)
+> 상태: 구현 중 (Spring 코드 완료, 실제 Supabase 비교 완료, Flutter 전환 진행 중 — 실기기 회귀 테스트 남음)
 > 시작일: 2026-07-29
-> 진행 기록: [2026-07-29 Phase 1 진행 기록](../progress/2026-07-29-phase-01-progress.md)
+> 진행 기록: [2026-07-29 Phase 1 진행 기록](../progress/2026-07-29-phase-01-progress.md), [2026-08-05 Flutter 전환 기록](../progress/2026-08-05-phase-01-flutter-transition.md)
 
 ## 1. 목적
 
@@ -134,12 +134,14 @@ member/
 |---|---|---|---|
 | 1-A | 기존 코드·Schema·RLS 조사 | 확인 사실과 위험 목록 | 완료 |
 | 1-B | Member 규칙·API 계약 확정 | M-02~M-06 결정 | 완료 |
-| 1-C | Spring 읽기 구현 | 조회·권한·기존 결과 비교 테스트 | 검증 중 |
+| 1-C | Spring 읽기 구현 | 조회·권한·기존 결과 비교 테스트 | 완료 |
 | 1-D | Spring 초기화·수정 구현 | 멱등성·검증·중복 테스트 | 완료 |
-| 1-E | Flutter Member 호출 전환 | 프로필 직접 조회·쓰기 제거 | 예정 |
+| 1-E | Flutter Member 호출 전환 | 프로필 직접 조회·쓰기 제거(nickname/height/weight 범위) | 진행 중 |
 | 1-F | 안정화와 문서 동기화 | 로그·오류·데이터 비교 결과 | 예정 |
 
-2026-07-29 Testcontainers PostgreSQL에서 전체 16개 테스트가 통과했다. Member 초기화·조회·수정은 Docker 로컬 DB에서도 검증했다. 1-C는 실제 Supabase `profiles`와 결과 비교가 남아 있어 검증 중으로 유지한다.
+2026-07-29 Testcontainers PostgreSQL에서 전체 16개 테스트가 통과했다. Member 초기화·조회·수정은 Docker 로컬 DB에서도 검증했다.
+
+2026-08-05 실제 운영 Supabase 계정(개발자 본인 카카오 계정)으로 로그인해 Spring `GET /api/v1/members/me` 응답과 기존 Flutter 조회 결과가 일치함을 확인해 1-C를 완료로 전환했다. 같은 세션에서 Flutter `AuthCubit`의 조회·초기화·닉네임 수정 경로를 Spring API 호출로 전환했다(1-E). 다만 닉네임·키·몸무게 수정의 실기기 회귀 테스트와 이메일·Apple 로그인 경로 테스트가 남아 있어 1-E는 진행 중으로 유지한다. 상세: [2026-08-05 Flutter 전환 기록](../progress/2026-08-05-phase-01-flutter-transition.md).
 
 ## 9. 전환 원칙
 

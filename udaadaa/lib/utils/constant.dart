@@ -28,6 +28,8 @@ final String mixpanelToken = dotenv.env['MIXPANEL_TOKEN']!;
 final String schemeName = dotenv.env['SCHEME_NAME']!;
 final String hostName = dotenv.env['HOST_NAME']!;
 final String initialChatEndPoint = dotenv.env['INITIAL_CHAT_END_POINT']!;
+final String springApiUrl =
+    dotenv.env['SPRING_API_URL'] ?? 'http://localhost:8080';
 
 final supabase = Supabase.instance.client;
 final dioClient = DioClient();
