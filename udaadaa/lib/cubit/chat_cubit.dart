@@ -8,6 +8,7 @@ import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 import 'package:udaadaa/cubit/auth_cubit.dart';
 import 'package:udaadaa/cubit/challenge_cubit.dart';
 import 'package:udaadaa/cubit/form_cubit.dart';
@@ -18,6 +19,7 @@ import 'package:udaadaa/models/message.dart';
 import 'package:udaadaa/models/profile.dart';
 import 'package:udaadaa/models/room.dart';
 import 'package:udaadaa/data/chat_api_client.dart';
+import 'package:udaadaa/data/chat_stomp_client.dart';
 import 'package:udaadaa/data/moderation_api_client.dart';
 import 'package:udaadaa/utils/analytics/analytics.dart';
 import 'package:udaadaa/utils/constant.dart';
@@ -333,6 +335,7 @@ class ChatCubit extends Cubit<ChatState> {
       });
 
       setChatEventsListener();
+      _connectStomp();
       _initialized = true;
       debugPrint("✅ 초기화 완료!");
 
@@ -1286,6 +1289,139 @@ class ChatCubit extends Cubit<ChatState> {
       ..subscribe();
   }
 
+  /// STOMP(`/ws/chat`)에 연결하고 참가 중인 모든 방의 `/topic/rooms/{roomId}`를 구독한다.
+  ///
+  /// 위의 Supabase Realtime `chat_events`(messages INSERT) 리스너는 아직 그대로 둔다 —
+  /// sendMessage/sendImageMessage를 Spring REST로 전환했지만, 다른 전송 경로(Phase C
+  /// 대상: 방 참가 등)가 아직 Supabase를 직접 건드릴 수 있어 완전히 걷어내기엔 이르다.
+  /// 같은 메시지가 STOMP와 Realtime 양쪽에서 오더라도 _ingestStompMessage의 id 중복 체크로
+  /// 한 번만 반영된다.
+  void _connectStomp() {
+    chatStompClient.connect(
+      onConnected: () {
+        for (final room in chatList) {
+          chatStompClient.subscribeToRoom(room.id);
+          _catchUpRoom(room.id);
+        }
+      },
+      onMessage: _handleStompMessage,
+    );
+  }
+
+  void _handleStompMessage(String roomId, Map<String, dynamic> payload) {
+    if (blockedUsers.contains(payload['senderId'])) return;
+
+    final myUserId = supabase.auth.currentUser!.id;
+    Room? room;
+    try {
+      room = chatList.firstWhere((r) => r.id == roomId);
+    } catch (_) {
+      return; // 내가 모르는 방이면 무시(구독 권한 자체가 서버에서 막히므로 실질적으로 안 옴)
+    }
+
+    final message = Message.fromSpringMap(
+      map: {
+        ...payload,
+        // STOMP 브로드캐스트 페이로드(ChatMessageBroadcastPayload)에는 createdAt이 없다
+        // — 방금 커밋된 메시지라 지금 시각으로 근사해도 실사용에 문제없다.
+        'createdAt': DateTime.now().toUtc().toIso8601String(),
+        'isDeleted': false,
+      },
+      myUserId: myUserId,
+      profile: room.memberMap[payload['senderId']],
+      reactions: [],
+      readReceipts: {},
+    );
+
+    _ingestStompMessage(message);
+  }
+
+  /// 재연결 시(onConnect가 다시 호출될 때마다) 끊겨있던 동안 놓친 메시지를 REST로 따라잡는다.
+  Future<void> _catchUpRoom(String roomId) async {
+    try {
+      final loaded = messages[roomId];
+      final after = (loaded != null && loaded.isNotEmpty)
+          ? (loaded.first.sequence ?? myLastReadSequenceByRoom[roomId] ?? 0)
+          : (myLastReadSequenceByRoom[roomId] ?? 0);
+
+      final data = await chatApiClient.getMessages(roomId, after: after, limit: 50);
+      if (data.isEmpty) return;
+
+      final myUserId = supabase.auth.currentUser!.id;
+      final room = chatList.firstWhere((r) => r.id == roomId);
+      final memberMap = room.memberMap;
+
+      for (final m in data) {
+        final message = Message.fromSpringMap(
+          map: m,
+          myUserId: myUserId,
+          profile: memberMap[m['senderId']],
+          reactions: [],
+          readReceipts: {},
+        );
+        _ingestStompMessage(message);
+      }
+    } catch (e) {
+      logger.e("⛔ [$roomId] STOMP 재연결 gap-recovery 실패: $e");
+    }
+  }
+
+  /// STOMP·gap-recovery 공용 메시지 반영. Realtime insert 핸들러와 로직은 같지만
+  /// (id 중복 체크로 서로 안전하게 공존) 그 핸들러 자체는 건드리지 않기 위해 분리했다.
+  void _ingestStompMessage(Message message) {
+    if (!messages.containsKey(message.roomId)) {
+      messages[message.roomId] = [];
+    }
+
+    final recentMessages = messages[message.roomId]!.take(5).toList();
+    if (recentMessages.any((m) => m.id == message.id)) {
+      return;
+    }
+
+    messages[message.roomId] = [message, ...messages[message.roomId]!];
+    messages[message.roomId]!.sort((a, b) {
+      final aTime = a.createdAt;
+      final bTime = b.createdAt;
+      if (aTime == null && bTime == null) return 0;
+      if (bTime == null) return -1;
+      if (aTime == null) return 1;
+      return bTime.compareTo(aTime);
+    });
+
+    if (message.imagePath != null) {
+      makeImageUrlMessage(message, emitLoaded: false);
+
+      imageMessages[message.roomId] ??= [];
+      imageMessages[message.roomId] = [message, ...imageMessages[message.roomId]!];
+      makeImageUrlImageMessage(message);
+    }
+
+    final index = chatList.indexWhere((room) => room.id == message.roomId);
+    if (index != -1) {
+      chatList[index] = chatList[index].copyWith(lastMessage: message);
+    }
+
+    chatList.sort((a, b) {
+      final aTime = a.lastMessage?.createdAt;
+      final bTime = b.lastMessage?.createdAt;
+      if (aTime == null && bTime == null) return 0;
+      if (bTime == null) return -1;
+      if (aTime == null) return 1;
+      return bTime.compareTo(aTime);
+    });
+
+    if (message.roomId == currentRoomId) {
+      sendReadReceipt(message.roomId, message.id!);
+    } else {
+      unreadMessageIdsByRoom[message.roomId] ??= [];
+      unreadMessageIdsByRoom[message.roomId]!.add(message.id!);
+      unreadMessages[message.roomId] = (unreadMessages[message.roomId] ?? 0) + 1;
+      unreadMessageCount++;
+    }
+
+    emit(ChatMessageLoaded());
+  }
+
   // void setReactionListener() {
   //   final existingChannels = supabase.getChannels();
   //   final isAlreadySubscribed = existingChannels.any((c) {
@@ -1396,6 +1532,7 @@ class ChatCubit extends Cubit<ChatState> {
     _messageChannel?.unsubscribe(); // ✅ Supabase 채널 해제
     _reactionChannel?.unsubscribe();
     _readReceiptChannel?.unsubscribe();
+    chatStompClient.disconnect();
 
     return super.close();
   }
@@ -1733,19 +1870,20 @@ class ChatCubit extends Cubit<ChatState> {
     currentRoomId = null;
   }
 
+  /// Spring REST(`POST /rooms/{roomId}/messages`)로 전송한다.
+  ///
+  /// 여기서 로컬 상태를 직접 갱신하지 않는다 — 원래도 그랬듯(Supabase upsert 시절에도
+  /// UI 갱신은 realtime insert 콜백이 담당) 서버가 저장을 커밋한 뒤 STOMP로 다시
+  /// 나(=참가자)에게 브로드캐스트해주는 걸 그대로 받아서 반영한다(_ingestStompMessage).
   Future<void> sendMessage(String content, String type, String roomId) async {
     try {
-      final message = Message(
-        roomId: roomId,
-        userId: supabase.auth.currentUser!.id,
-        content: content,
+      final clientMessageId = const Uuid().v4();
+      await chatApiClient.sendMessage(
+        roomId,
+        clientMessageId: clientMessageId,
         type: type,
-        isMine: true,
-        reactions: [],
-        readReceipts: {},
-        isDeleted: false,
+        content: content,
       );
-      await supabase.from('messages').upsert(message.toMap());
     } catch (e) {
       logger.e("sendMessage error: $e");
     }
@@ -1913,16 +2051,13 @@ class ChatCubit extends Cubit<ChatState> {
       final imagePaths = await uploadImages(roomId, _selectedImages);
 
       for (final imagePath in imagePaths) {
-        final message = Message(
-          roomId: roomId,
-          userId: supabase.auth.currentUser!.id,
-          imagePath: imagePath,
+        final clientMessageId = const Uuid().v4();
+        await chatApiClient.sendMessage(
+          roomId,
+          clientMessageId: clientMessageId,
           type: 'imageMessage',
-          isMine: true,
-          reactions: [],
-          readReceipts: {},
+          imagePath: imagePath,
         );
-        await supabase.from('messages').upsert(message.toMap());
       }
       _selectedImage = null;
       _selectedImages = [];
