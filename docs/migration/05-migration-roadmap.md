@@ -398,7 +398,7 @@ Supabase PostgreSQL, Auth와 Storage는 초기 마이그레이션에서 바로 �
 |---|---|---|
 | 0. Spring 공통 기반 | 완료 | [Phase 0 계획](phases/phase-00-foundation.md), [검증 결과](phases/phase-00-verification.md) — 실제 Supabase JWT·spring_app DB Role 연동 검증 완료 |
 | 1. Member | 진행 중 | [Phase 1 계획](phases/phase-01-member.md), [로컬 구현·검증 결과](progress/2026-07-29-phase-01-progress.md), 실제 Supabase 비교·Flutter 전환 대기 |
-| 2. Moderation | 구현 중 | [Phase 2 계획](phases/phase-02-moderation.md) — Spring·Flutter 코드 작성 완료, 로컬 `./gradlew test` 확인 대기 |
+| 2. Moderation | 구현 중 | [Phase 2 계획](phases/phase-02-moderation.md) — Spring·Flutter 코드 작성 완료, 로컬 `./gradlew test` 통과 확인. 실기기 테스트만 남음 |
 | 3. Chat + Notification | 예정 | 채팅 E2E·복구·지연·중복 Push 검증 |
 | 4. Challenge | 예정 | 참가 transaction·미션 규칙 테스트 |
 | 5. Record + 미션 통합 | 예정 | 미션 E2E·정합성·멱등성 검증 |

@@ -5,7 +5,7 @@
 - Spring `moderation` 모듈 신규 구현 (domain/application/infrastructure/presentation 4계층, Member 모듈과 동일한 구조)
 - `spring_app` DB Role에 `blocked_users` SELECT/INSERT/DELETE 권한 추가, 운영 DB에 직접 적용·확인 완료
 - Flutter `chat_cubit.dart`의 `fetchBlockedUsers()`, `blockUser()`를 Spring Moderation API 호출로 전환
-- **이 세션 샌드박스에 Java 21이 없어 Spring 코드는 컴파일·테스트를 로컬에서 아직 못 돌렸다.** 사용자 로컬 터미널에서 `./gradlew test` 확인 필요
+- 이 세션 샌드박스에 Java 21이 없어 Claude가 직접 빌드하지 못했으나, 사용자 로컬 터미널에서 `./gradlew test --tests "com.udaadaa.moderation.*"`를 실행해 `BUILD SUCCESSFUL`로 통과를 확인했다(2026-08-06)
 
 ## 2. 배경
 
@@ -59,13 +59,12 @@ Phase 1(Member) 완료 후 로드맵 순서대로 Phase 2(Moderation)를 진행�
 - `spring_app` Role의 `blocked_users` 권한이 운영 DB에 실제로 부여됐는지 `information_schema.role_table_grants` 조회로 확인
 
 검증 못 함 (다음 세션 확인 필요):
-- Spring 코드 컴파일·`./gradlew test` 실행 (이 세션 샌드박스에 Java 21이 없어서 못 돌림)
+- 전체 `./gradlew test`(Member 등 기존 모듈 포함 회귀 확인) — 이번엔 `moderation` 패키지만 필터링해 돌렸음
 - 실기기에서 실제 차단 동작 (Phase 1과 동일하게 전체 Phase 종료 후 일괄 테스트로 미룸)
 - `flutter analyze`
 
 ## 5. 다음 작업
 
-1. 사용자 로컬 터미널에서 `cd udaadaa_server && ./gradlew test --tests "com.udaadaa.moderation.*"` 실행해 신규 테스트(`ModerationIntegrationTests`) 통과 확인
-2. 전체 `./gradlew test`로 기존 테스트(Member 등) 회귀 확인
-3. 안정성 확인되면 Phase 2 2-D~2-F를 완료로 전환하고 `phase-02-moderation.md`, README 갱신
-4. Phase 3(Chat + Notification) 계획 착수
+1. 전체 `./gradlew test`로 기존 테스트(Member 등) 회귀 확인
+2. Phase 3(Chat + Notification) 계획 착수
+3. 전체 Phase 종료 후 일괄 실기기 테스트에 Moderation(차단) 시나리오 추가

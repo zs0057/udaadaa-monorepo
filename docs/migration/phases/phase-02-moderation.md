@@ -1,6 +1,6 @@
 # Phase 2: Moderation Migration
 
-> 상태: 구현 중 (Spring 코드·Flutter 전환 작성 완료, 로컬 빌드·테스트 확인 남음)
+> 상태: 구현 중 (Spring 코드·Flutter 전환 완료, `./gradlew test` 통과 확인 완료 — 실기기 테스트만 남음)
 > 시작일: 2026-08-06
 > 진행 기록: [2026-08-06 Phase 2 구현 기록](../progress/2026-08-06-phase-02-moderation-implementation.md)
 
@@ -117,11 +117,11 @@ moderation/
 | 2-A | 기존 코드·Schema·RLS 조사 | 이 문서 §2 | 완료 |
 | 2-B | Moderation 규칙·API 계약 확정 | MOD-01~05 결정 승인 | 완료 |
 | 2-C | `spring_app` Role에 `blocked_users` 권한 추가 | SQL 스크립트 작성·운영 DB 적용·`information_schema` 확인 | 완료 |
-| 2-D | Spring 차단 생성·해제·조회 구현 | 코드 작성 완료. `./gradlew test` 로컬 확인 남음(샌드박스에 Java 21 없음) | 코드 완료 (테스트 확인 대기) |
+| 2-D | Spring 차단 생성·해제·조회 구현 | 단위·통합 테스트(`ModerationIntegrationTests`) 로컬 `./gradlew test` 통과 | 완료 |
 | 2-E | Flutter 차단 생성·조회를 Spring API로 전환 | `chat_cubit.dart`의 `fetchBlockedUsers`·`blockUser` 전환 완료 | 코드 완료 |
-| 2-F | 안정화와 문서 동기화 | 로그·오류 확인, 실기기 테스트는 전체 Phase 종료 후 일괄 | 예정 |
+| 2-F | 안정화와 문서 동기화 | 로그·오류 확인, 실기기 테스트는 전체 Phase 종료 후 일괄 | 문서 동기화 완료 (실기기 테스트만 남음) |
 
-2026-08-06 위 결정(MOD-01~05)을 그대로 승인 없이 진행하기로 하고 구현까지 마쳤다(사용자 요청에 따라 계획→구현을 한 세션에서 빠르게 진행). Spring `moderation` 모듈(domain/application/infrastructure/presentation)과 Flutter 전환을 모두 작성했으나, 이 세션 환경에 Java 21이 없어 `./gradlew test`를 직접 돌리지 못했다. 사용자 로컬 환경에서 테스트 통과를 확인해야 2-D를 완료로 전환할 수 있다. 상세: [2026-08-06 Phase 2 구현 기록](../progress/2026-08-06-phase-02-moderation-implementation.md).
+2026-08-06 위 결정(MOD-01~05)을 그대로 승인 없이 진행하기로 하고 구현까지 마쳤다(사용자 요청에 따라 계획→구현을 한 세션에서 빠르게 진행). Spring `moderation` 모듈(domain/application/infrastructure/presentation)과 Flutter 전환을 모두 작성했다. 이 세션 샌드박스에는 Java 21이 없어 Claude가 직접 빌드하지 못했으나, 사용자 로컬 터미널에서 `./gradlew test --tests "com.udaadaa.moderation.*"`를 실행해 `BUILD SUCCESSFUL`로 통과를 확인했다. 남은 것은 실기기 회귀 테스트뿐이며, 이는 Phase 1과 동일하게 전체 Phase 종료 후 일괄 진행한다. 상세: [2026-08-06 Phase 2 구현 기록](../progress/2026-08-06-phase-02-moderation-implementation.md).
 
 ## 8. 검증 기준
 
