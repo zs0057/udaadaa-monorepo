@@ -80,6 +80,79 @@ public class ChatApplicationService {
         return chatRepository.isParticipant(roomId, memberId);
     }
 
+    @Transactional
+    public void joinRoom(MemberId memberId, RoomId roomId) {
+        if (!chatRepository.roomExists(roomId)) {
+            throw new RoomNotFoundException();
+        }
+        boolean joined = chatRepository.addParticipantIfAbsent(roomId, memberId);
+        if (!joined) {
+            throw new AlreadyParticipantException();
+        }
+    }
+
+    @Transactional
+    public void leaveRoom(MemberId memberId, RoomId roomId) {
+        // 원래 참가자가 아니었어도 에러 없이 성공 처리한다(DELETE 멱등 원칙).
+        chatRepository.removeParticipant(roomId, memberId);
+    }
+
+    @Transactional
+    public void updateReadPosition(MemberId memberId, RoomId roomId, long lastReadSequence) {
+        requireParticipant(roomId, memberId);
+        chatRepository.updateReadPositionIfGreater(roomId, memberId, lastReadSequence);
+    }
+
+    @Transactional
+    public UUID addReaction(MemberId memberId, RoomId roomId, UUID messageId, String content) {
+        requireParticipant(roomId, memberId);
+        requireMessageInRoom(roomId, messageId);
+        return chatRepository.addReaction(roomId, messageId, memberId, content);
+    }
+
+    @Transactional
+    public void removeReaction(MemberId memberId, RoomId roomId, UUID reactionId) {
+        requireParticipant(roomId, memberId);
+        // 없거나 남의 반응이면 조용히 무시한다(DELETE 멱등 원칙, 정보 비노출).
+        chatRepository.removeReaction(reactionId, memberId);
+    }
+
+    @Transactional
+    public void deleteMessage(MemberId memberId, RoomId roomId, UUID messageId) {
+        requireParticipant(roomId, memberId);
+        boolean deleted = chatRepository.markMessageDeletedByOwner(roomId, messageId, memberId);
+        if (!deleted) {
+            throw new MessageNotFoundException();
+        }
+    }
+
+    @Transactional
+    public void hideMessage(MemberId memberId, RoomId roomId, UUID messageId) {
+        requireParticipant(roomId, memberId);
+        requireMessageInRoom(roomId, messageId);
+        chatRepository.hideMessage(roomId, messageId, memberId);
+    }
+
+    /**
+     * CHT-06: Spring이 참가자 여부만 확인하고 업로드 가능한 경로를 발급한다.
+     * 실제 업로드는 지금처럼 Flutter가 자신의 Supabase 세션으로 Storage에 직접 하고,
+     * (Storage RLS의 is_room_participant(folder[1]) 정책이 여전히 실제 방어선이다),
+     * 업로드 후 이 경로를 imagePath로 하는 sendMessage 호출로 메시지를 만든다.
+     *
+     * 미완료(승인만 되고 끝내 메시지로 이어지지 않은) 업로드 정리는 이번 범위에 넣지 않았다
+     * — 지금 앱도 동일한 갭이 있어 새로운 회귀가 아니고, 스토리지 정리는 별도 배치 작업으로
+     * 다루는 게 낫다고 판단했다.
+     */
+    @Transactional(readOnly = true)
+    public String approveImageUpload(MemberId memberId, RoomId roomId) {
+        requireParticipant(roomId, memberId);
+        return "%s/%s.jpg".formatted(roomId.value(), UUID.randomUUID());
+    }
+
+    private void requireMessageInRoom(RoomId roomId, UUID messageId) {
+        chatRepository.findMessageInRoom(roomId, messageId).orElseThrow(MessageNotFoundException::new);
+    }
+
     private void requireParticipant(RoomId roomId, MemberId memberId) {
         if (!chatRepository.isParticipant(roomId, memberId)) {
             throw new RoomNotFoundException();

@@ -123,12 +123,14 @@ notification/ (3-4)
 | 3-0 | 이 계획 승인 | CHT-01~06 결정 | 완료 (2026-08-06) |
 | 3-1 | 채팅 조회·복구 API + 순번 백필 | DB Expand·백필 완료, `spring_app` 읽기 권한 부여 완료, `chat` 모듈(조회 API 2개) 코드 작성 완료 | 코드 완료 (로컬 `./gradlew test` 확인 대기, Flutter 전환 전) |
 | 3-2 | 메시지 저장 API + STOMP 전달 | 저장·전달 E2E 테스트, 중복 전송 방지 테스트 | 코드 완료 (로컬 `./gradlew test` 확인 대기, Flutter 전환 전) |
-| 3-3 | 참가·읽음·반응·이미지 승인 | 권한·중복 테스트 | 예정 |
+| 3-3 | 참가·읽음·반응·이미지 승인 | 권한·중복 테스트 | 코드 완료 (로컬 `./gradlew test` 확인 대기, Flutter 전환 전) |
 | 3-4 | Notification 전환 + 기존 Webhook 제거 | 중복 Push 없음 확인 | 예정 |
 
 2026-08-06 3-1 구현: `messages`에 `sequence`(방별 단조 증가, 트리거로 자동 채번)·`client_message_id` 컬럼을 Expand 방식으로 추가하고 기존 4,053건을 방별로 백필했다(운영 DB에 직접 적용, 검증 완료). `spring_app` Role에 채팅 관련 6개 테이블 SELECT 권한을 추가했다. Spring `chat` 모듈을 새로 만들어 `GET /api/v1/chat/rooms`(참가 방 목록+마지막 메시지), `GET /api/v1/chat/rooms/{roomId}/messages?after=&limit=`(순번 기준 조회) 2개 API를 구현했다 — 비참가자의 접근은 방 존재 여부를 노출하지 않도록 항상 `404 ROOM_NOT_FOUND`로 응답한다. Flutter는 아직 이 API를 호출하지 않는다(기존 Edge Function 조회 경로 그대로 유지 중). 상세: [2026-08-06 Phase 3 3-1 구현 기록](../progress/2026-08-06-phase-03-3-1-implementation.md).
 
 2026-08-06 3-2 구현: `spring_app`에 `messages` INSERT 권한을 추가했다. `POST /api/v1/chat/rooms/{roomId}/messages`를 새로 만들어 `clientMessageId` 기반 멱등 저장(같은 값 재전송 시 새 행을 만들지 않고 기존 메시지를 그대로 반환)을 구현했고, 저장 성공 후 커밋 이후에만 발행되는 `ChatMessageCreated` 이벤트로 STOMP(`/ws/chat` 엔드포인트, `/topic/rooms/{roomId}` 브로커)를 통해 같은 방 참가자에게 실시간 전달한다. 인증은 STOMP CONNECT 프레임의 Authorization 헤더에서 JWT를 검증하는 방식(HTTP 핸드셰이크 자체는 permitAll)이고, SUBSCRIBE마다 참가자 여부를 서버가 다시 확인한다(`BYPASSRLS` Role이라 DB가 막아주지 않음). 이 API가 만들 수 있는 타입은 `textMessage`/`imageMessage`뿐이고, `missionMessage`(Phase 5 소관)·`infoMessage`(시스템 생성)는 이 경로로 거부된다. Flutter는 아직 이 API를 호출하지 않는다. 상세: [2026-08-06 Phase 3 3-2 구현 기록](../progress/2026-08-06-phase-03-3-2-implementation.md).
+
+2026-08-06 3-3 구현: `room_participants`에 `last_read_sequence`(Expand) 컬럼을 추가하고, `spring_app`에 참가/나가기·반응·메시지 삭제·숨김에 필요한 쓰기 권한을 추가했다. 새 API 7종을 구현했다 — 방 참가(`POST /rooms/{roomId}/participants`, 이미 참가 중이면 `409 ALREADY_JOINED`), 방 나가기(`DELETE /rooms/{roomId}/participants/me`, 멱등), 읽음 위치 갱신(`PATCH /rooms/{roomId}/read-position`, 뒤로 가는 값은 무시), 반응 추가/삭제(`POST/DELETE .../reactions`, 운영 DB와 동일하게 중복 반응 허용·남의 반응 삭제는 조용히 무시), 메시지 삭제(`DELETE /rooms/{roomId}/messages/{messageId}`, 발신자 본인만·아니면 `404 MESSAGE_NOT_FOUND`), 메시지 숨김(`POST .../hide`, 멱등), 이미지 업로드 경로 승인(`POST /rooms/{roomId}/image-uploads`). 이미지 업로드는 CHT-06 두 옵션 중 "경로만 발급"으로 확정해, 실제 업로드는 지금처럼 Flutter가 자기 Supabase 세션 + Storage RLS로 직접 처리하고 Spring은 참가자 확인 후 방 스코프 경로만 내려준다 — service_role 키를 Spring이 새로 다루지 않아도 되는 선택. 미완료 업로드 정리는 지금 앱에도 없는 기능이라 이번 범위에서 의도적으로 뺐다(회귀 아님). Flutter는 아직 이 API들을 호출하지 않는다. 상세: [2026-08-06 Phase 3 3-3 구현 기록](../progress/2026-08-06-phase-03-3-3-implementation.md).
 
 실기기 테스트는 Phase 1·2와 동일하게 전체 마이그레이션 종료 후 일괄 진행 원칙을 유지하되, **Phase 3은 실시간성이 핵심 기능이라 3-2 완료 시점에는 최소한 로컬/스테이징에서 한 번은 실제 기기로 확인하는 예외를 두는 것을 권장**(일반 CRUD와 달리 STOMP 연결 자체의 성립 여부는 자동 테스트만으로 완전히 보장하기 어려움).
 

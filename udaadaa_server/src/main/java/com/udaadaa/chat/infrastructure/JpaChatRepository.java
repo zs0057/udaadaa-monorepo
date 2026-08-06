@@ -6,6 +6,7 @@ import com.udaadaa.chat.domain.MessageSummary;
 import com.udaadaa.chat.domain.RoomSummary;
 import com.udaadaa.member.MemberId;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
@@ -16,15 +17,21 @@ class JpaChatRepository implements ChatRepository {
     private final SpringDataRoomRepository roomRepository;
     private final SpringDataRoomParticipantRepository roomParticipantRepository;
     private final SpringDataMessageRepository messageRepository;
+    private final SpringDataChatReactionRepository chatReactionRepository;
+    private final SpringDataBlockedMessageRepository blockedMessageRepository;
 
     JpaChatRepository(
             SpringDataRoomRepository roomRepository,
             SpringDataRoomParticipantRepository roomParticipantRepository,
-            SpringDataMessageRepository messageRepository
+            SpringDataMessageRepository messageRepository,
+            SpringDataChatReactionRepository chatReactionRepository,
+            SpringDataBlockedMessageRepository blockedMessageRepository
     ) {
         this.roomRepository = roomRepository;
         this.roomParticipantRepository = roomParticipantRepository;
         this.messageRepository = messageRepository;
+        this.chatReactionRepository = chatReactionRepository;
+        this.blockedMessageRepository = blockedMessageRepository;
     }
 
     @Override
@@ -45,6 +52,11 @@ class JpaChatRepository implements ChatRepository {
     @Override
     public boolean isParticipant(RoomId roomId, MemberId memberId) {
         return roomParticipantRepository.existsByRoomIdAndUserId(roomId.value(), memberId.value());
+    }
+
+    @Override
+    public boolean roomExists(RoomId roomId) {
+        return roomRepository.existsById(roomId.value());
     }
 
     @Override
@@ -82,6 +94,48 @@ class JpaChatRepository implements ChatRepository {
                 .orElseThrow(() -> new IllegalStateException(
                         "Message insert did not fail but the row could not be found afterwards"
                 ));
+    }
+
+    @Override
+    public Optional<MessageSummary> findMessageInRoom(RoomId roomId, UUID messageId) {
+        return messageRepository.findByIdAndRoomId(messageId, roomId.value()).map(this::toMessageSummary);
+    }
+
+    @Override
+    public boolean addParticipantIfAbsent(RoomId roomId, MemberId memberId) {
+        return roomParticipantRepository.insertIfAbsent(roomId.value(), memberId.value()) > 0;
+    }
+
+    @Override
+    public void removeParticipant(RoomId roomId, MemberId memberId) {
+        roomParticipantRepository.deleteByRoomIdAndUserId(roomId.value(), memberId.value());
+    }
+
+    @Override
+    public void updateReadPositionIfGreater(RoomId roomId, MemberId memberId, long lastReadSequence) {
+        roomParticipantRepository.updateLastReadSequenceIfGreater(roomId.value(), memberId.value(), lastReadSequence);
+    }
+
+    @Override
+    public UUID addReaction(RoomId roomId, UUID messageId, MemberId memberId, String content) {
+        UUID id = UUID.randomUUID();
+        chatReactionRepository.insert(id, roomId.value(), messageId, memberId.value(), content);
+        return id;
+    }
+
+    @Override
+    public void removeReaction(UUID reactionId, MemberId memberId) {
+        chatReactionRepository.deleteByIdAndUserId(reactionId, memberId.value());
+    }
+
+    @Override
+    public boolean markMessageDeletedByOwner(RoomId roomId, UUID messageId, MemberId senderId) {
+        return messageRepository.markDeletedByOwner(messageId, roomId.value(), senderId.value()) > 0;
+    }
+
+    @Override
+    public void hideMessage(RoomId roomId, UUID messageId, MemberId memberId) {
+        blockedMessageRepository.insertIfAbsent(memberId.value(), messageId, roomId.value());
     }
 
     private MessageSummary toMessageSummary(MessageJpaEntity entity) {

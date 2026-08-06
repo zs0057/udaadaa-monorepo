@@ -1,6 +1,8 @@
 package com.udaadaa.chat;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -80,6 +82,7 @@ class ChatIntegrationTests extends AbstractIntegrationTest {
                     user_id uuid not null,
                     room_id uuid not null,
                     push_option boolean not null default true,
+                    last_read_sequence bigint not null default 0,
                     primary key (user_id, room_id)
                 )
                 """);
@@ -141,10 +144,31 @@ class ChatIntegrationTests extends AbstractIntegrationTest {
                     for each row
                     execute function public.assign_message_sequence()
                 """);
+        jdbcTemplate.execute("""
+                create table if not exists public.chat_reactions (
+                    id uuid primary key,
+                    created_at timestamp with time zone not null default now(),
+                    user_id uuid not null,
+                    message_id uuid not null,
+                    content text not null,
+                    room_id uuid not null
+                )
+                """);
+        jdbcTemplate.execute("""
+                create table if not exists public.blocked_messages (
+                    created_at timestamp with time zone not null default now(),
+                    user_id uuid not null,
+                    message_id uuid not null,
+                    room_id uuid not null,
+                    primary key (user_id, message_id)
+                )
+                """);
     }
 
     @BeforeEach
     void clearTables() {
+        jdbcTemplate.update("delete from public.chat_reactions");
+        jdbcTemplate.update("delete from public.blocked_messages");
         jdbcTemplate.update("delete from public.messages");
         jdbcTemplate.update("delete from public.room_participants");
         jdbcTemplate.update("delete from public.rooms");
@@ -315,12 +339,215 @@ class ChatIntegrationTests extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
     }
 
-    private void insertMessage(UUID roomId, UUID userId, String content, long sequence) {
+    @Test
+    void joinsRoomSuccessfully() throws Exception {
+        // USER_B는 ROOM_1에 아직 참가하지 않은 상태(clearTables 기본값)
+        mockMvc.perform(post("/api/v1/chat/rooms/" + ROOM_1 + "/participants")
+                        .header("Authorization", bearerToken(USER_B)))
+                .andExpect(status().isNoContent());
+
+        Integer count = jdbcTemplate.queryForObject(
+                "select count(*) from public.room_participants where room_id = ? and user_id = ?",
+                Integer.class, ROOM_1, USER_B
+        );
+        org.assertj.core.api.Assertions.assertThat(count).isEqualTo(1);
+    }
+
+    @Test
+    void rejectsJoiningTwice() throws Exception {
+        mockMvc.perform(post("/api/v1/chat/rooms/" + ROOM_1 + "/participants")
+                        .header("Authorization", bearerToken(USER_B)))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(post("/api/v1/chat/rooms/" + ROOM_1 + "/participants")
+                        .header("Authorization", bearerToken(USER_B)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ALREADY_JOINED"));
+    }
+
+    @Test
+    void rejectsJoiningNonExistentRoom() throws Exception {
+        mockMvc.perform(post("/api/v1/chat/rooms/" + UUID.randomUUID() + "/participants")
+                        .header("Authorization", bearerToken(USER_B)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ROOM_NOT_FOUND"));
+    }
+
+    @Test
+    void leavesRoomIdempotently() throws Exception {
+        // USER_A는 ROOM_1 참가자(clearTables 기본값)
+        mockMvc.perform(delete("/api/v1/chat/rooms/" + ROOM_1 + "/participants/me")
+                        .header("Authorization", bearerToken(USER_A)))
+                .andExpect(status().isNoContent());
+
+        Integer count = jdbcTemplate.queryForObject(
+                "select count(*) from public.room_participants where room_id = ? and user_id = ?",
+                Integer.class, ROOM_1, USER_A
+        );
+        org.assertj.core.api.Assertions.assertThat(count).isZero();
+
+        // 이미 나간 상태에서 다시 나가도 에러 없이 성공해야 한다(DELETE 멱등)
+        mockMvc.perform(delete("/api/v1/chat/rooms/" + ROOM_1 + "/participants/me")
+                        .header("Authorization", bearerToken(USER_A)))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void updatesReadPositionButNeverGoesBackward() throws Exception {
+        insertMessage(ROOM_1, USER_A, "1", 1);
+        insertMessage(ROOM_1, USER_A, "2", 2);
+        insertMessage(ROOM_1, USER_A, "3", 3);
+
+        mockMvc.perform(patch("/api/v1/chat/rooms/" + ROOM_1 + "/read-position")
+                        .header("Authorization", bearerToken(USER_A))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"lastReadSequence\":3}"))
+                .andExpect(status().isNoContent());
+
+        // 더 작은 값으로 갱신 시도해도 무시되어야 한다
+        mockMvc.perform(patch("/api/v1/chat/rooms/" + ROOM_1 + "/read-position")
+                        .header("Authorization", bearerToken(USER_A))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"lastReadSequence\":1}"))
+                .andExpect(status().isNoContent());
+
+        Long lastReadSequence = jdbcTemplate.queryForObject(
+                "select last_read_sequence from public.room_participants where room_id = ? and user_id = ?",
+                Long.class, ROOM_1, USER_A
+        );
+        org.assertj.core.api.Assertions.assertThat(lastReadSequence).isEqualTo(3L);
+    }
+
+    @Test
+    void rejectsReadPositionUpdateFromNonParticipant() throws Exception {
+        mockMvc.perform(patch("/api/v1/chat/rooms/" + ROOM_1 + "/read-position")
+                        .header("Authorization", bearerToken(USER_B))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"lastReadSequence\":1}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ROOM_NOT_FOUND"));
+    }
+
+    @Test
+    void addsReactionEvenIfDuplicate() throws Exception {
+        UUID messageId = insertMessage(ROOM_1, USER_A, "리액션 대상", 1);
+
+        mockMvc.perform(post("/api/v1/chat/rooms/" + ROOM_1 + "/messages/" + messageId + "/reactions")
+                        .header("Authorization", bearerToken(USER_A))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\"👍\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").isNotEmpty());
+
+        // 같은 사용자가 같은 이모지를 또 남겨도 막지 않는다(운영 DB 제약과 동일한 동작 재현)
+        mockMvc.perform(post("/api/v1/chat/rooms/" + ROOM_1 + "/messages/" + messageId + "/reactions")
+                        .header("Authorization", bearerToken(USER_A))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\"👍\"}"))
+                .andExpect(status().isOk());
+
+        Integer count = jdbcTemplate.queryForObject(
+                "select count(*) from public.chat_reactions where message_id = ?",
+                Integer.class, messageId
+        );
+        org.assertj.core.api.Assertions.assertThat(count).isEqualTo(2);
+    }
+
+    @Test
+    void removingSomeoneElsesReactionIsSilentlyIgnored() throws Exception {
+        UUID messageId = insertMessage(ROOM_1, USER_A, "리액션 대상", 1);
+        UUID reactionId = UUID.randomUUID();
+        jdbcTemplate.update(
+                "insert into public.chat_reactions (id, room_id, message_id, user_id, content) values (?, ?, ?, ?, ?)",
+                reactionId, ROOM_1, messageId, USER_A, "👍"
+        );
+        // 이 테스트만 USER_B를 ROOM_1 참가자로 추가해, "참가자이지만 남의 반응은 못 지운다"를 검증한다.
+        jdbcTemplate.update(
+                "insert into public.room_participants (user_id, room_id) values (?, ?)",
+                USER_B, ROOM_1
+        );
+
+        // 참가자이긴 하지만 본인 반응이 아니므로 조용히 무시되고 204로 성공 응답한다(정보 비노출, DELETE 멱등).
+        mockMvc.perform(delete("/api/v1/chat/rooms/" + ROOM_1 + "/reactions/" + reactionId)
+                        .header("Authorization", bearerToken(USER_B)))
+                .andExpect(status().isNoContent());
+
+        Integer count = jdbcTemplate.queryForObject(
+                "select count(*) from public.chat_reactions where id = ?",
+                Integer.class, reactionId
+        );
+        org.assertj.core.api.Assertions.assertThat(count).isEqualTo(1);
+    }
+
+    @Test
+    void deletesOwnMessageButNotOthers() throws Exception {
+        UUID myMessageId = insertMessage(ROOM_1, USER_A, "내 메시지", 1);
+
+        mockMvc.perform(delete("/api/v1/chat/rooms/" + ROOM_1 + "/messages/" + myMessageId)
+                        .header("Authorization", bearerToken(USER_A)))
+                .andExpect(status().isNoContent());
+
+        Boolean isDeleted = jdbcTemplate.queryForObject(
+                "select is_deleted from public.messages where id = ?", Boolean.class, myMessageId
+        );
+        org.assertj.core.api.Assertions.assertThat(isDeleted).isTrue();
+    }
+
+    @Test
+    void rejectsDeletingSomeoneElsesMessage() throws Exception {
+        insertMessage(ROOM_1, USER_A, "USER_A 메시지", 1);
+        UUID roomTwoMessage = insertMessage(ROOM_2, USER_B, "USER_B 메시지", 1);
+
+        // USER_A는 ROOM_2에도 참가 중이지만(clearTables 기본값) 발신자가 아니므로 거부되어야 한다
+        mockMvc.perform(delete("/api/v1/chat/rooms/" + ROOM_2 + "/messages/" + roomTwoMessage)
+                        .header("Authorization", bearerToken(USER_A)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("MESSAGE_NOT_FOUND"));
+    }
+
+    @Test
+    void hidesMessageIdempotently() throws Exception {
+        UUID messageId = insertMessage(ROOM_1, USER_A, "숨길 메시지", 1);
+
+        mockMvc.perform(post("/api/v1/chat/rooms/" + ROOM_1 + "/messages/" + messageId + "/hide")
+                        .header("Authorization", bearerToken(USER_A)))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(post("/api/v1/chat/rooms/" + ROOM_1 + "/messages/" + messageId + "/hide")
+                        .header("Authorization", bearerToken(USER_A)))
+                .andExpect(status().isNoContent());
+
+        Integer count = jdbcTemplate.queryForObject(
+                "select count(*) from public.blocked_messages where user_id = ? and message_id = ?",
+                Integer.class, USER_A, messageId
+        );
+        org.assertj.core.api.Assertions.assertThat(count).isEqualTo(1);
+    }
+
+    @Test
+    void approvesImageUploadPathScopedToRoom() throws Exception {
+        mockMvc.perform(post("/api/v1/chat/rooms/" + ROOM_1 + "/image-uploads")
+                        .header("Authorization", bearerToken(USER_A)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.path").value(org.hamcrest.Matchers.startsWith(ROOM_1 + "/")))
+                .andExpect(jsonPath("$.path").value(org.hamcrest.Matchers.endsWith(".jpg")));
+    }
+
+    @Test
+    void rejectsImageUploadApprovalForNonParticipant() throws Exception {
+        mockMvc.perform(post("/api/v1/chat/rooms/" + ROOM_1 + "/image-uploads")
+                        .header("Authorization", bearerToken(USER_B)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ROOM_NOT_FOUND"));
+    }
+
+    private UUID insertMessage(UUID roomId, UUID userId, String content, long sequence) {
+        UUID id = UUID.randomUUID();
         jdbcTemplate.update(
                 "insert into public.messages (id, room_id, user_id, content, type, sequence) values "
                         + "(?, ?, ?, ?, cast(? as \"MessageType\"), ?)",
-                UUID.randomUUID(), roomId, userId, content, "textMessage", sequence
+                id, roomId, userId, content, "textMessage", sequence
         );
+        return id;
     }
 
     private String bearerToken(UUID userId) {
