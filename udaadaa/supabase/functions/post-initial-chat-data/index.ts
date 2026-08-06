@@ -1,10 +1,10 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-// const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-// const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const supabaseUrl = "https://ccpcclfqofyvksajnrpg.supabase.co";
-const serviceKey =
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNjcGNjbGZxb2Z5dmtzYWpucnBnIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTcyNTI3OTU4NywiZXhwIjoyMDQwODU1NTg3fQ.pq6q9fUHEuf-2zyz5wupXRGigDRG8AnWfrOJ2CX0zh0";
+// 2026-08-06: 하드코딩된 service_role 키(레포에 커밋되어 있던 값)를 제거하고
+// Supabase Edge Function 런타임이 자동 주입하는 환경변수를 사용하도록 되돌렸다.
+// 유출된 값은 Supabase 대시보드에서 별도로 비활성화(rotate)해야 한다.
+const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const supabase = createClient(supabaseUrl, serviceKey);
 
 // --- Interfaces ---

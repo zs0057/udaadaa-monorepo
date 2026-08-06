@@ -44,8 +44,10 @@ Udaadaa는 채팅과 챌린지를 통해 사용자가 건강 목표를 꾸준히
     - 사용자 차단과 공통 상호작용 허용 규칙을 Spring으로 이전합니다.
     - 현재 상태: Spring Moderation 모듈(차단 생성·해제·조회·양방향 상호작용 확인 API)과 Flutter 전환 완료, 로컬 `./gradlew test` 통과 확인. 실기기 테스트는 전체 Phase 종료 후 일괄 진행 예정
     - 상세 문서: [Phase 2 Moderation](docs/migration/phases/phase-02-moderation.md), [2026-08-06 구현 기록](docs/migration/progress/2026-08-06-phase-02-moderation-implementation.md)
-  - [ ] **Phase 3 — Chat + Notification** · 예정
+  - [ ] **Phase 3 — Chat + Notification** · 계획 수립
     - 채팅 저장·STOMP 전달·누락 복구·읽음·Push를 이전합니다.
+    - 현재 상태: 기존 코드·Schema·Edge Function 조사 완료, 3-1~3-4 하위 단계 계획 수립, 구현 승인 대기. 조사 중 발견한 `service_role` 키 유출은 코드 수정 완료·로테이션 보류(Phase 0 Verification §7 참고)
+    - 상세 문서: [Phase 3 Chat + Notification](docs/migration/phases/phase-03-chat-notification.md)
   - [ ] **Phase 4 — Challenge** · 예정
     - 챌린지 참여·기간·미션 진행과 성공 판정을 이전합니다.
   - [ ] **Phase 5 — Record + 미션 통합** · 예정
