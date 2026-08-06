@@ -8,6 +8,7 @@ public record RoomSummary(
         String roomName,
         LocalDate startDay,
         LocalDate endDay,
-        MessageSummary lastMessage
+        MessageSummary lastMessage,
+        long myLastReadSequence
 ) {
 }
