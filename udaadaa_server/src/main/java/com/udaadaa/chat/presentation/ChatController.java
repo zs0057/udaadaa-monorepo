@@ -8,12 +8,16 @@ import com.udaadaa.member.MemberId;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -66,6 +70,60 @@ class ChatController {
                 request.imagePath()
         );
         return MessageSummaryResponse.from(saved);
+    }
+
+    @PostMapping("/rooms/{roomId}/participants")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void joinRoom(@PathVariable UUID roomId) {
+        chatApplicationService.joinRoom(currentMemberId(), RoomId.from(roomId));
+    }
+
+    @DeleteMapping("/rooms/{roomId}/participants/me")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void leaveRoom(@PathVariable UUID roomId) {
+        chatApplicationService.leaveRoom(currentMemberId(), RoomId.from(roomId));
+    }
+
+    @PatchMapping("/rooms/{roomId}/read-position")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void updateReadPosition(@PathVariable UUID roomId, @Valid @RequestBody UpdateReadPositionRequest request) {
+        chatApplicationService.updateReadPosition(currentMemberId(), RoomId.from(roomId), request.lastReadSequence());
+    }
+
+    @PostMapping("/rooms/{roomId}/messages/{messageId}/reactions")
+    ReactionResponse addReaction(
+            @PathVariable UUID roomId,
+            @PathVariable UUID messageId,
+            @Valid @RequestBody AddReactionRequest request
+    ) {
+        UUID reactionId = chatApplicationService.addReaction(
+                currentMemberId(), RoomId.from(roomId), messageId, request.content()
+        );
+        return new ReactionResponse(reactionId);
+    }
+
+    @DeleteMapping("/rooms/{roomId}/reactions/{reactionId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void removeReaction(@PathVariable UUID roomId, @PathVariable UUID reactionId) {
+        chatApplicationService.removeReaction(currentMemberId(), RoomId.from(roomId), reactionId);
+    }
+
+    @DeleteMapping("/rooms/{roomId}/messages/{messageId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void deleteMessage(@PathVariable UUID roomId, @PathVariable UUID messageId) {
+        chatApplicationService.deleteMessage(currentMemberId(), RoomId.from(roomId), messageId);
+    }
+
+    @PostMapping("/rooms/{roomId}/messages/{messageId}/hide")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void hideMessage(@PathVariable UUID roomId, @PathVariable UUID messageId) {
+        chatApplicationService.hideMessage(currentMemberId(), RoomId.from(roomId), messageId);
+    }
+
+    @PostMapping("/rooms/{roomId}/image-uploads")
+    ImageUploadApprovalResponse approveImageUpload(@PathVariable UUID roomId) {
+        String path = chatApplicationService.approveImageUpload(currentMemberId(), RoomId.from(roomId));
+        return new ImageUploadApprovalResponse(path);
     }
 
     private MemberId currentMemberId() {

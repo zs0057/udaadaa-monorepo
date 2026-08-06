@@ -23,6 +23,9 @@ class RoomParticipantJpaEntity {
     @Column(name = "push_option", nullable = false)
     private boolean pushOption;
 
+    @Column(name = "last_read_sequence", nullable = false)
+    private long lastReadSequence;
+
     protected RoomParticipantJpaEntity() {
     }
 
@@ -32,5 +35,9 @@ class RoomParticipantJpaEntity {
 
     UUID roomId() {
         return roomId;
+    }
+
+    long lastReadSequence() {
+        return lastReadSequence;
     }
 }
