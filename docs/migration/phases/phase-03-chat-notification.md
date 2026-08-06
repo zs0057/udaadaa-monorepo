@@ -78,11 +78,13 @@ RLS는 전부 `is_room_participant(room_id)` SECURITY DEFINER 함수 기반이�
 | ID | 항목 | 제안 | 비고 |
 |---|---|---|---|
 | CHT-01 | 실시간 전달 기술 | STOMP(WebSocket) 신규 도입 (확정, 2026-08-06) | TO-BE 아키텍처 문서 기준. Spring Boot에 `spring-boot-starter-websocket` 추가 필요. 연결 관리·재연결·스케일 시 sticky session 운영 부담을 팀이 새로 떠안는다는 점 인지하고 승인함 |
-| CHT-02 | 메시지 정렬 기준 | `messages`에 `sequence BIGINT` 컬럼 추가(방별 단조 증가) | 기존 `created_at` 정렬을 유지하며 병행 추가(Expand), 안정화 후 전환(Switch) |
-| CHT-03 | 중복 방지 | `client_message_id` 컬럼 + UNIQUE(`room_id`, `client_message_id`) 추가 | Flutter가 UUID 생성해 전송 |
-| CHT-04 | Realtime 대체 시점 | 3-2 완료 후에도 당분간 Supabase Realtime 구독을 유지하고, STOMP 안정화 확인 후 제거 | 두 경로 동시 활성화 금지 원칙과 충돌하지 않도록 "받기만" 이중화하고 "쓰기"는 항상 단일 경로 유지 |
+| CHT-02 | 메시지 정렬 기준 | `messages`에 `sequence BIGINT` 컬럼 추가(방별 단조 증가) (확정, 2026-08-06) | 기존 `created_at` 정렬을 유지하며 병행 추가(Expand), 안정화 후 전환(Switch) |
+| CHT-03 | 중복 방지 | `client_message_id` 컬럼 + UNIQUE(`room_id`, `client_message_id`) 추가 (확정, 2026-08-06) | Flutter가 UUID 생성해 전송 |
+| CHT-04 | Realtime 대체 시점 | 3-2 완료 후에도 당분간 Supabase Realtime 구독을 유지하고, STOMP 안정화 확인 후 제거 (확정, 2026-08-06) | 두 경로 동시 활성화 금지 원칙과 충돌하지 않도록 "받기만" 이중화하고 "쓰기"는 항상 단일 경로 유지 |
 | CHT-05 | DB Webhook 전환 | `message-push` 트리거 정의를 마이그레이션 파일로 baseline 캡처(확정, 2026-08-06) 후 3-4 배포와 동시에 `DROP TRIGGER`로 전환 | 대시보드 UI 설정이 아니라 일반 Postgres 트리거(`supabase_functions.http_request`)로 확인됨. baseline: [phase-03-message-push-trigger-baseline.sql](../sql/phase-03-message-push-trigger-baseline.sql). 이 트리거 정의 자체에 유출된 `service_role` 키가 Authorization 헤더로 박혀 있어, 실제 키 로테이션 시 Edge Function 코드 2개뿐 아니라 이 트리거도 같이 갱신해야 함(Phase 0 Verification §7 추적) |
-| CHT-06 | 이미지 업로드 방식 | Spring이 업로드 가능 여부를 승인(발급된 경로/서명)한 뒤 Flutter가 Storage에 직접 업로드하는 현재 패턴 유지 | 이미지 자체를 Spring 서버로 프록시하지 않음(트래픽·비용 이유) |
+| CHT-06 | 이미지 업로드 방식 | Spring이 업로드 가능 여부를 승인(발급된 경로/서명)한 뒤 Flutter가 Storage에 직접 업로드하는 현재 패턴 유지 (확정, 2026-08-06) | 이미지 자체를 Spring 서버로 프록시하지 않음(트래픽·비용 이유) |
+
+2026-08-06 CHT-01~06 전체 승인 완료. 3-1(채팅 조회와 복구) 구현에 착수한다.
 
 ## 5. 목표 API/이벤트 초안 (3-1, 3-2 우선)
 
@@ -118,17 +120,19 @@ notification/ (3-4)
 
 | 단계 | 작업 | 완료 증거 | 상태 |
 |---|---|---|---|
-| 3-0 | 이 계획 승인 | CHT-01~06 결정 | 승인 대기 |
-| 3-1 | 채팅 조회·복구 API + 순번 백필 | 기존 Flutter 조회 결과와 비교 테스트 | 예정 |
+| 3-0 | 이 계획 승인 | CHT-01~06 결정 | 완료 (2026-08-06) |
+| 3-1 | 채팅 조회·복구 API + 순번 백필 | DB Expand·백필 완료, `spring_app` 읽기 권한 부여 완료, `chat` 모듈(조회 API 2개) 코드 작성 완료 | 코드 완료 (로컬 `./gradlew test` 확인 대기, Flutter 전환 전) |
 | 3-2 | 메시지 저장 API + STOMP 전달 | 저장·전달 E2E 테스트, 중복 전송 방지 테스트 | 예정 |
 | 3-3 | 참가·읽음·반응·이미지 승인 | 권한·중복 테스트 | 예정 |
 | 3-4 | Notification 전환 + 기존 Webhook 제거 | 중복 Push 없음 확인 | 예정 |
+
+2026-08-06 3-1 구현: `messages`에 `sequence`(방별 단조 증가, 트리거로 자동 채번)·`client_message_id` 컬럼을 Expand 방식으로 추가하고 기존 4,053건을 방별로 백필했다(운영 DB에 직접 적용, 검증 완료). `spring_app` Role에 채팅 관련 6개 테이블 SELECT 권한을 추가했다. Spring `chat` 모듈을 새로 만들어 `GET /api/v1/chat/rooms`(참가 방 목록+마지막 메시지), `GET /api/v1/chat/rooms/{roomId}/messages?after=&limit=`(순번 기준 조회) 2개 API를 구현했다 — 비참가자의 접근은 방 존재 여부를 노출하지 않도록 항상 `404 ROOM_NOT_FOUND`로 응답한다. Flutter는 아직 이 API를 호출하지 않는다(기존 Edge Function 조회 경로 그대로 유지 중). 상세: [2026-08-06 Phase 3 3-1 구현 기록](../progress/2026-08-06-phase-03-3-1-implementation.md).
 
 실기기 테스트는 Phase 1·2와 동일하게 전체 마이그레이션 종료 후 일괄 진행 원칙을 유지하되, **Phase 3은 실시간성이 핵심 기능이라 3-2 완료 시점에는 최소한 로컬/스테이징에서 한 번은 실제 기기로 확인하는 예외를 두는 것을 권장**(일반 CRUD와 달리 STOMP 연결 자체의 성립 여부는 자동 테스트만으로 완전히 보장하기 어려움).
 
 ## 8. 선행 조건과 위험
 
-- Phase 0~2에서 만든 `spring_app` Role에 `rooms`, `room_participants`, `messages`, `chat_reactions`, `read_receipts`, `blocked_messages` 권한이 아직 없다 — 3-1 착수 전에 추가해야 한다.
+- ~~Phase 0~2에서 만든 `spring_app` Role에 `rooms`, `room_participants`, `messages`, `chat_reactions`, `read_receipts`, `blocked_messages` 권한이 아직 없다~~ 2026-08-06 SELECT 권한 부여 완료([SQL](../../../udaadaa_server/scripts/db-admin/phase-03-spring-app-chat-read-grant.sql)). INSERT/UPDATE/DELETE는 3-2 착수 시 추가.
 - Supabase Storage(`ImageMessages` 버킷) 접근 방식을 Spring이 어떻게 승인할지(서명 URL 등) 아직 결정되지 않았다.
 - `message-push`를 트리거하는 것은 일반 Postgres 트리거이며 baseline을 마이그레이션 파일로 캡처해뒀다([참고](../sql/phase-03-message-push-trigger-baseline.sql)). 다만 3-4 배포와 `DROP TRIGGER` 실행 시점이 어긋나면 여전히 이중 Push가 발생할 수 있어, 같은 배포 창에서 순서대로 실행하는 절차를 3-4 착수 시 체크리스트로 만들어야 한다.
 - 이 트리거의 Authorization 헤더에 유출된 `service_role` 키가 그대로 박혀 있다(Edge Function 코드와 동일 키). 실제 로테이션 시 트리거도 같이 갱신 필요(Phase 0 Verification §7).
