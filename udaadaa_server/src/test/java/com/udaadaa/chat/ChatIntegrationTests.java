@@ -233,6 +233,17 @@ class ChatIntegrationTests extends AbstractIntegrationTest {
     }
 
     @Test
+    void returnsRoomMembersWithNicknames() throws Exception {
+        mockMvc.perform(get("/api/v1/chat/rooms")
+                        .header("Authorization", bearerToken(USER_B)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(ROOM_2.toString()))
+                .andExpect(jsonPath("$[0].members.length()").value(2))
+                .andExpect(jsonPath("$[0].members[?(@.id=='" + USER_A + "')].nickname").value("사용자 A"))
+                .andExpect(jsonPath("$[0].members[?(@.id=='" + USER_B + "')].nickname").value("사용자 B"));
+    }
+
+    @Test
     void returnsMessagesAfterSequenceInAscendingOrder() throws Exception {
         insertMessage(ROOM_1, USER_A, "1", 1);
         insertMessage(ROOM_1, USER_A, "2", 2);

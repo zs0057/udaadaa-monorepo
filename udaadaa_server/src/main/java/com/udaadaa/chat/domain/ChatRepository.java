@@ -10,7 +10,8 @@ import java.util.UUID;
 public interface ChatRepository {
 
     /**
-     * memberId가 참가 중인 방 목록을 마지막 메시지와 함께 반환한다.
+     * memberId가 참가 중인 방 목록을 마지막 메시지·전체 참가자 ID 목록과 함께 반환한다
+     * (참가자 닉네임 해석은 ChatApplicationService가 MemberReader로 별도 수행).
      */
     List<RoomSummary> findRoomSummariesForMember(MemberId memberId);
 

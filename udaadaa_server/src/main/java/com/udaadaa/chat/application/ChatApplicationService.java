@@ -7,6 +7,8 @@ import com.udaadaa.chat.domain.MessageSummary;
 import com.udaadaa.chat.domain.ReadPosition;
 import com.udaadaa.chat.domain.RoomSummary;
 import com.udaadaa.member.MemberId;
+import com.udaadaa.member.MemberReader;
+import com.udaadaa.member.MemberSummary;
 import com.udaadaa.moderation.ModerationReader;
 import java.util.List;
 import java.util.Map;
@@ -28,15 +30,18 @@ public class ChatApplicationService {
 
     private final ChatRepository chatRepository;
     private final ModerationReader moderationReader;
+    private final MemberReader memberReader;
     private final ApplicationEventPublisher eventPublisher;
 
     ChatApplicationService(
             ChatRepository chatRepository,
             ModerationReader moderationReader,
+            MemberReader memberReader,
             ApplicationEventPublisher eventPublisher
     ) {
         this.chatRepository = chatRepository;
         this.moderationReader = moderationReader;
+        this.memberReader = memberReader;
         this.eventPublisher = eventPublisher;
     }
 
@@ -45,6 +50,16 @@ public class ChatApplicationService {
         // 방 목록의 마지막 메시지 미리보기는 기존 Edge Function과 동일하게 차단 필터링을 하지 않는다
         // (차단 여부와 무관하게 방의 실제 최신 메시지를 보여주는 게 기존 동작).
         return chatRepository.findRoomSummariesForMember(memberId);
+    }
+
+    /**
+     * getRooms()가 반환한 RoomSummary들의 participantIds를 한 번에 닉네임으로 해석한다.
+     * Chat이 Member 데이터를 직접 저장하지 않으므로 표시용 닉네임은 요청 시점에 배치 조회한다
+     * (기존 post-initial-chat-data Edge Function이 rooms에 profiles를 임베드하던 것과 동일한 역할).
+     */
+    @Transactional(readOnly = true)
+    public Map<MemberId, MemberSummary> resolveMembers(Set<MemberId> memberIds) {
+        return memberReader.findAllByIds(memberIds);
     }
 
     @Transactional(readOnly = true)

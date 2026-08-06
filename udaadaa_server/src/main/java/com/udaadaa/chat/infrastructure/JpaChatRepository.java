@@ -50,7 +50,10 @@ class JpaChatRepository implements ChatRepository {
                                 .orElse(null),
                         roomParticipantRepository.findByRoomIdAndUserId(room.id(), memberId.value())
                                 .map(RoomParticipantJpaEntity::lastReadSequence)
-                                .orElse(0L)
+                                .orElse(0L),
+                        roomParticipantRepository.findByRoomId(room.id()).stream()
+                                .map(p -> MemberId.from(p.userId()))
+                                .toList()
                 ))
                 .toList();
     }

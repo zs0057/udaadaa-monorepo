@@ -3,11 +3,16 @@ package com.udaadaa.chat.presentation;
 import com.udaadaa.chat.RoomId;
 import com.udaadaa.chat.application.ChatApplicationService;
 import com.udaadaa.chat.domain.MessageSummary;
+import com.udaadaa.chat.domain.RoomSummary;
 import com.udaadaa.common.security.CurrentUserProvider;
 import com.udaadaa.member.MemberId;
+import com.udaadaa.member.MemberSummary;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -39,8 +44,13 @@ class ChatController {
 
     @GetMapping("/rooms")
     List<RoomSummaryResponse> getRooms() {
-        return chatApplicationService.getRooms(currentMemberId()).stream()
-                .map(RoomSummaryResponse::from)
+        List<RoomSummary> summaries = chatApplicationService.getRooms(currentMemberId());
+        Set<MemberId> participantIds = summaries.stream()
+                .flatMap(room -> room.participantIds().stream())
+                .collect(Collectors.toSet());
+        Map<MemberId, MemberSummary> members = chatApplicationService.resolveMembers(participantIds);
+        return summaries.stream()
+                .map(room -> RoomSummaryResponse.from(room, members))
                 .toList();
     }
 
