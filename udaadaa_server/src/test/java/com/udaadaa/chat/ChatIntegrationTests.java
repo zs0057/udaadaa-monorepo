@@ -163,10 +163,20 @@ class ChatIntegrationTests extends AbstractIntegrationTest {
                     primary key (user_id, message_id)
                 )
                 """);
+        // Moderation의 canInteractWith가 조회하는 테이블 — Member/Moderation 테스트와 같은 정의를 공유한다.
+        jdbcTemplate.execute("""
+                create table if not exists public.blocked_users (
+                    created_at timestamp with time zone not null default now(),
+                    user_id uuid not null,
+                    block_user_id uuid not null,
+                    primary key (user_id, block_user_id)
+                )
+                """);
     }
 
     @BeforeEach
     void clearTables() {
+        jdbcTemplate.update("delete from public.blocked_users");
         jdbcTemplate.update("delete from public.chat_reactions");
         jdbcTemplate.update("delete from public.blocked_messages");
         jdbcTemplate.update("delete from public.messages");
@@ -206,6 +216,20 @@ class ChatIntegrationTests extends AbstractIntegrationTest {
                         .header("Authorization", bearerToken(USER_A)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.id=='" + ROOM_1 + "')].lastMessage.content").value("두번째 메시지"));
+    }
+
+    @Test
+    void returnsMyLastReadSequencePerRoom() throws Exception {
+        jdbcTemplate.update(
+                "update public.room_participants set last_read_sequence = 7 where user_id = ? and room_id = ?",
+                USER_A, ROOM_1
+        );
+
+        mockMvc.perform(get("/api/v1/chat/rooms")
+                        .header("Authorization", bearerToken(USER_A)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id=='" + ROOM_1 + "')].myLastReadSequence").value(7))
+                .andExpect(jsonPath("$[?(@.id=='" + ROOM_2 + "')].myLastReadSequence").value(0));
     }
 
     @Test
@@ -546,6 +570,39 @@ class ChatIntegrationTests extends AbstractIntegrationTest {
                 Integer.class, USER_A, messageId
         );
         org.assertj.core.api.Assertions.assertThat(count).isEqualTo(1);
+    }
+
+    @Test
+    void hiddenMessageIsExcludedFromMessageList() throws Exception {
+        UUID visibleId = insertMessage(ROOM_1, USER_A, "보이는 메시지", 1);
+        UUID hiddenId = insertMessage(ROOM_1, USER_A, "숨긴 메시지", 2);
+        jdbcTemplate.update(
+                "insert into public.blocked_messages (user_id, message_id, room_id) values (?, ?, ?)",
+                USER_A, hiddenId, ROOM_1
+        );
+
+        mockMvc.perform(get("/api/v1/chat/rooms/" + ROOM_1 + "/messages")
+                        .header("Authorization", bearerToken(USER_A)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(visibleId.toString()));
+    }
+
+    @Test
+    void blockedSendersMessagesAreExcludedFromMessageList() throws Exception {
+        // ROOM_2에 USER_A, USER_B 둘 다 참가(clearTables 기본값). USER_A가 USER_B를 차단.
+        jdbcTemplate.update(
+                "insert into public.blocked_users (user_id, block_user_id) values (?, ?)",
+                USER_A, USER_B
+        );
+        UUID myMessage = insertMessage(ROOM_2, USER_A, "내 메시지", 1);
+        insertMessage(ROOM_2, USER_B, "차단한 사람 메시지", 2);
+
+        mockMvc.perform(get("/api/v1/chat/rooms/" + ROOM_2 + "/messages")
+                        .header("Authorization", bearerToken(USER_A)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(myMessage.toString()));
     }
 
     @Test

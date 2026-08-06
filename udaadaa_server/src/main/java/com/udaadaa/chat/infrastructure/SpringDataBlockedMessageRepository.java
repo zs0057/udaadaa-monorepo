@@ -1,5 +1,7 @@
 package com.udaadaa.chat.infrastructure;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -7,6 +9,9 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 interface SpringDataBlockedMessageRepository extends JpaRepository<BlockedMessageJpaEntity, BlockedMessageId> {
+
+    @Query("select b.messageId from BlockedMessageJpaEntity b where b.userId = :userId and b.messageId in :messageIds")
+    List<UUID> findHiddenMessageIds(@Param("userId") UUID userId, @Param("messageIds") Collection<UUID> messageIds);
 
     /**
      * 이미 숨긴 메시지면 아무 것도 하지 않는다(멱등).

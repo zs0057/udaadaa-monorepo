@@ -6,8 +6,10 @@ import com.udaadaa.chat.domain.MessageSummary;
 import com.udaadaa.chat.domain.ReadPosition;
 import com.udaadaa.chat.domain.RoomSummary;
 import com.udaadaa.member.MemberId;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
@@ -45,7 +47,10 @@ class JpaChatRepository implements ChatRepository {
                         room.endDay(),
                         messageRepository.findFirstByRoomIdOrderBySequenceDesc(room.id())
                                 .map(this::toMessageSummary)
-                                .orElse(null)
+                                .orElse(null),
+                        roomParticipantRepository.findByRoomIdAndUserId(room.id(), memberId.value())
+                                .map(RoomParticipantJpaEntity::lastReadSequence)
+                                .orElse(0L)
                 ))
                 .toList();
     }
@@ -144,6 +149,14 @@ class JpaChatRepository implements ChatRepository {
         return roomParticipantRepository.findByRoomId(roomId.value()).stream()
                 .map(p -> new ReadPosition(MemberId.from(p.userId()), p.lastReadSequence()))
                 .toList();
+    }
+
+    @Override
+    public Set<UUID> findHiddenMessageIds(MemberId memberId, Set<UUID> messageIds) {
+        if (messageIds.isEmpty()) {
+            return Set.of();
+        }
+        return new HashSet<>(blockedMessageRepository.findHiddenMessageIds(memberId.value(), messageIds));
     }
 
     private MessageSummary toMessageSummary(MessageJpaEntity entity) {

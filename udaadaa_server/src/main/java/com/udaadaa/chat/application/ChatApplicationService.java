@@ -7,9 +7,12 @@ import com.udaadaa.chat.domain.MessageSummary;
 import com.udaadaa.chat.domain.ReadPosition;
 import com.udaadaa.chat.domain.RoomSummary;
 import com.udaadaa.member.MemberId;
+import com.udaadaa.moderation.ModerationReader;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,15 +27,23 @@ public class ChatApplicationService {
     private static final Set<String> CREATABLE_MESSAGE_TYPES = Set.of("textMessage", "imageMessage");
 
     private final ChatRepository chatRepository;
+    private final ModerationReader moderationReader;
     private final ApplicationEventPublisher eventPublisher;
 
-    ChatApplicationService(ChatRepository chatRepository, ApplicationEventPublisher eventPublisher) {
+    ChatApplicationService(
+            ChatRepository chatRepository,
+            ModerationReader moderationReader,
+            ApplicationEventPublisher eventPublisher
+    ) {
         this.chatRepository = chatRepository;
+        this.moderationReader = moderationReader;
         this.eventPublisher = eventPublisher;
     }
 
     @Transactional(readOnly = true)
     public List<RoomSummary> getRooms(MemberId memberId) {
+        // 방 목록의 마지막 메시지 미리보기는 기존 Edge Function과 동일하게 차단 필터링을 하지 않는다
+        // (차단 여부와 무관하게 방의 실제 최신 메시지를 보여주는 게 기존 동작).
         return chatRepository.findRoomSummariesForMember(memberId);
     }
 
@@ -40,7 +51,29 @@ public class ChatApplicationService {
     public List<MessageSummary> getMessages(MemberId memberId, RoomId roomId, long afterSequence, int limit) {
         requireParticipant(roomId, memberId);
         int boundedLimit = Math.min(Math.max(limit, 1), MAX_MESSAGE_PAGE_SIZE);
-        return chatRepository.findMessagesAfter(roomId, afterSequence, boundedLimit);
+        List<MessageSummary> messages = chatRepository.findMessagesAfter(roomId, afterSequence, boundedLimit);
+        return filterBlockedAndHidden(memberId, messages);
+    }
+
+    /**
+     * 차단한(또는 차단당한) 상대의 메시지와, 내가 개인적으로 숨긴 메시지를 걸러낸다.
+     * 기존 post-initial-chat-data Edge Function이 하던 필터링을 그대로 재현한다.
+     */
+    private List<MessageSummary> filterBlockedAndHidden(MemberId memberId, List<MessageSummary> messages) {
+        if (messages.isEmpty()) {
+            return messages;
+        }
+
+        Set<MemberId> senderIds = messages.stream().map(MessageSummary::senderId).collect(Collectors.toSet());
+        Map<MemberId, Boolean> interactable = moderationReader.canInteractWith(memberId, senderIds);
+
+        Set<UUID> messageIds = messages.stream().map(MessageSummary::id).collect(Collectors.toSet());
+        Set<UUID> hiddenIds = chatRepository.findHiddenMessageIds(memberId, messageIds);
+
+        return messages.stream()
+                .filter(message -> interactable.getOrDefault(message.senderId(), true))
+                .filter(message -> !hiddenIds.contains(message.id()))
+                .toList();
     }
 
     @Transactional

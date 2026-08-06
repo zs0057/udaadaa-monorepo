@@ -9,7 +9,8 @@ record RoomSummaryResponse(
         String roomName,
         LocalDate startDay,
         LocalDate endDay,
-        MessageSummaryResponse lastMessage
+        MessageSummaryResponse lastMessage,
+        long myLastReadSequence
 ) {
 
     static RoomSummaryResponse from(RoomSummary room) {
@@ -18,7 +19,8 @@ record RoomSummaryResponse(
                 room.roomName(),
                 room.startDay(),
                 room.endDay(),
-                room.lastMessage() == null ? null : MessageSummaryResponse.from(room.lastMessage())
+                room.lastMessage() == null ? null : MessageSummaryResponse.from(room.lastMessage()),
+                room.myLastReadSequence()
         );
     }
 }

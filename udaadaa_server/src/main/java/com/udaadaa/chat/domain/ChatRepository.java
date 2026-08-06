@@ -4,6 +4,7 @@ import com.udaadaa.chat.RoomId;
 import com.udaadaa.member.MemberId;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 public interface ChatRepository {
@@ -89,4 +90,9 @@ public interface ChatRepository {
      * 계산할 수 있도록 — 이 모듈은 카운트 자체를 계산해주지 않고 원본 위치만 내려준다).
      */
     List<ReadPosition> findReadPositions(RoomId roomId);
+
+    /**
+     * 주어진 메시지 중 memberId가 개인적으로 숨긴(blocked_messages) 것의 id만 반환한다.
+     */
+    Set<UUID> findHiddenMessageIds(MemberId memberId, Set<UUID> messageIds);
 }
