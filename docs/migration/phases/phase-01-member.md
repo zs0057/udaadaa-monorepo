@@ -1,6 +1,6 @@
 # Phase 1: Member Migration
 
-> 상태: 구현 중 (Spring 코드 완료, 실제 Supabase 비교 완료, Flutter 전환 진행 중 — 실기기 회귀 테스트 남음)
+> 상태: 구현 중 (Spring 코드 완료, 실제 Supabase 비교 완료, Flutter 전환 코드 완료 — 실기기 회귀 테스트는 전체 Phase 완료 후 일괄 진행 예정)
 > 시작일: 2026-07-29
 > 진행 기록: [2026-07-29 Phase 1 진행 기록](../progress/2026-07-29-phase-01-progress.md), [2026-08-06 Flutter 전환 기록](../progress/2026-08-06-phase-01-flutter-transition.md)
 
@@ -136,12 +136,12 @@ member/
 | 1-B | Member 규칙·API 계약 확정 | M-02~M-06 결정 | 완료 |
 | 1-C | Spring 읽기 구현 | 조회·권한·기존 결과 비교 테스트 | 완료 |
 | 1-D | Spring 초기화·수정 구현 | 멱등성·검증·중복 테스트 | 완료 |
-| 1-E | Flutter Member 호출 전환 | 프로필 직접 조회·쓰기 제거(nickname/height/weight 범위) | 진행 중 |
-| 1-F | 안정화와 문서 동기화 | 로그·오류·데이터 비교 결과 | 예정 |
+| 1-E | Flutter Member 호출 전환 | 프로필 직접 조회·쓰기 제거(nickname/height/weight 범위) | 코드 완료 (실기기 검증 보류) |
+| 1-F | 안정화와 문서 동기화 | 로그·오류·데이터 비교 결과 | 예정 (일괄 실기기 테스트 이후) |
 
 2026-07-29 Testcontainers PostgreSQL에서 전체 16개 테스트가 통과했다. Member 초기화·조회·수정은 Docker 로컬 DB에서도 검증했다.
 
-2026-08-06 실제 운영 Supabase 계정(개발자 본인 카카오 계정)으로 로그인해 Spring `GET /api/v1/members/me` 응답과 기존 Flutter 조회 결과가 일치함을 확인해 1-C를 완료로 전환했다. 같은 세션에서 Flutter `AuthCubit`의 조회·초기화·닉네임 수정 경로를 Spring API 호출로 전환했다(1-E). 다만 닉네임·키·몸무게 수정의 실기기 회귀 테스트와 이메일·Apple 로그인 경로 테스트가 남아 있어 1-E는 진행 중으로 유지한다. 상세: [2026-08-06 Flutter 전환 기록](../progress/2026-08-06-phase-01-flutter-transition.md).
+2026-08-06 실제 운영 Supabase 계정(개발자 본인 카카오 계정)으로 로그인해 Spring `GET /api/v1/members/me` 응답과 기존 Flutter 조회 결과가 일치함을 확인해 1-C를 완료로 전환했다. 같은 세션에서 Flutter `AuthCubit`의 조회·초기화·닉네임 수정 경로를 Spring API 호출로 전환했다(1-E 코드 작업 완료). 닉네임·키·몸무게 수정과 이메일·Apple 로그인 경로의 실기기 회귀 테스트는 개별 Phase마다 하지 않고, 전체 마이그레이션 Phase가 끝난 뒤 한 번에 일괄 진행하기로 결정했다(속도 우선, 개발 중 반복 테스트 비용 절감 목적). 이 결정에 따라 1-F(안정화)도 그 일괄 테스트 이후로 미룬다. 상세: [2026-08-06 Flutter 전환 기록](../progress/2026-08-06-phase-01-flutter-transition.md).
 
 ## 9. 전환 원칙
 
@@ -184,6 +184,7 @@ member/
 - `profiles`가 많은 도메인의 외래키 기준이므로 Phase 1에서 물리적 분리를 시도하면 영향 범위가 커진다.
 - 현재 UPDATE RLS에 `WITH CHECK`가 없어 Flutter 직접 접근이 남는 동안 보안 검토가 필요하다.
 - FCM·Push 필드는 아직 `profiles`와 기존 Edge Function에서 사용하므로 Phase 1에서 제거할 수 없다.
+- 실기기 회귀 테스트를 전체 Phase 종료 시점까지 미루기로 해, 이후 Phase에서 문제가 발견되면 어느 Phase의 변경이 원인인지 구분하기 어려울 수 있다. 일괄 테스트 시 Phase별로 순서대로 검증한다.
 
 ## 12. 롤백 기준
 

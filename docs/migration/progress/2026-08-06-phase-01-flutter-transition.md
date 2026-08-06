@@ -79,7 +79,7 @@ Phase 0 완료 후 남은 Phase 1 작업 중 1-E(Flutter Member 호출 전환)�
 
 ## 7. 다음 작업
 
-1. 위 "검증 못 함" 항목 실기기 테스트
-2. `flutter analyze`로 컴파일·린트 이상 없는지 확인
-3. iOS 빌드 관련 로컬 변경 파일(`Podfile.lock`, `project.pbxproj` 등)을 검토 후 필요한 것만 별도로 커밋할지 결정
-4. 안정성 확인되면 Phase 1 1-F(안정화) 완료 처리 및 `phase-01-member.md` 갱신
+1. ~~iOS 빌드 관련 로컬 변경 파일 검토~~ — 확인 결과 `Podfile.lock`, `project.pbxproj`, `pubspec.lock` 등은 모두 gitignore 대상이며 diff 없음. 커밋할 항목 없음 (2026-08-06 확인 완료).
+2. `flutter analyze`로 컴파일·린트 이상 없는지 확인 — 사용자 로컬 터미널에서 실행 필요.
+3. 위 "검증 못 함" 항목(닉네임·키·몸무게 수정, 이메일·Apple 로그인) 실기기 테스트는 **전체 마이그레이션 Phase 종료 후 한 번에 일괄 진행**하기로 결정(2026-08-06). Phase마다 반복 테스트하는 비용을 줄이고 속도를 우선하기 위함. 리스크: 문제 발생 시 원인 Phase 특정이 어려워질 수 있음 — 일괄 테스트 시 Phase 순서대로 검증.
+4. 안정성 확인되면 Phase 1 1-F(안정화) 완료 처리 및 `phase-01-member.md` 갱신 (일괄 테스트 이후)
