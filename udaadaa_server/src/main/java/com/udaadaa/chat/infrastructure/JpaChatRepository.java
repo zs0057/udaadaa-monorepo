@@ -82,6 +82,13 @@ class JpaChatRepository implements ChatRepository {
     }
 
     @Override
+    public List<MessageSummary> findRecentImageMessages(RoomId roomId, int limit) {
+        return messageRepository.findRecentImageMessages(roomId.value(), limit).stream()
+                .map(this::toMessageSummary)
+                .toList();
+    }
+
+    @Override
     public MessageSummary saveMessage(
             RoomId roomId,
             MemberId senderId,

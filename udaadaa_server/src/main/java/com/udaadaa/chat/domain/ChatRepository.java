@@ -32,6 +32,12 @@ public interface ChatRepository {
     List<MessageSummary> findMessagesAfter(RoomId roomId, long afterSequence, int limit);
 
     /**
+     * 채팅방 이미지 갤러리용 — imageMessage 타입만 최신순(내림차순)으로 최대 limit개 반환한다.
+     * 기존 post-initial-chat-data Edge Function의 image_messages_by_room과 동일한 역할.
+     */
+    List<MessageSummary> findRecentImageMessages(RoomId roomId, int limit);
+
+    /**
      * 메시지를 저장한다. 같은 (roomId, clientMessageId) 조합이 이미 있으면 새로 만들지 않고
      * 기존 메시지를 그대로 반환한다(재전송 멱등 처리, CHT-03).
      */

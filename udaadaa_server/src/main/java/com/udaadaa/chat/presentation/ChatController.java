@@ -30,6 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 class ChatController {
 
     private static final int DEFAULT_MESSAGE_PAGE_SIZE = 30;
+    private static final int DEFAULT_IMAGE_PAGE_SIZE = 32;
 
     private final CurrentUserProvider currentUserProvider;
     private final ChatApplicationService chatApplicationService;
@@ -62,6 +63,17 @@ class ChatController {
     ) {
         return chatApplicationService
                 .getMessages(currentMemberId(), RoomId.from(roomId), after, limit).stream()
+                .map(MessageSummaryResponse::from)
+                .toList();
+    }
+
+    @GetMapping("/rooms/{roomId}/images")
+    List<MessageSummaryResponse> getRecentImages(
+            @PathVariable UUID roomId,
+            @RequestParam(defaultValue = "" + DEFAULT_IMAGE_PAGE_SIZE) int limit
+    ) {
+        return chatApplicationService
+                .getRecentImages(currentMemberId(), RoomId.from(roomId), limit).stream()
                 .map(MessageSummaryResponse::from)
                 .toList();
     }

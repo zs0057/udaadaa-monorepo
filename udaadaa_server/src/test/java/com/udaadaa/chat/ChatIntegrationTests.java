@@ -259,6 +259,20 @@ class ChatIntegrationTests extends AbstractIntegrationTest {
     }
 
     @Test
+    void returnsOnlyImageMessagesNewestFirst() throws Exception {
+        insertMessage(ROOM_1, USER_A, "텍스트", 1, "textMessage");
+        insertMessage(ROOM_1, USER_A, "img1", 2, "imageMessage");
+        insertMessage(ROOM_1, USER_A, "img2", 3, "imageMessage");
+
+        mockMvc.perform(get("/api/v1/chat/rooms/" + ROOM_1 + "/images")
+                        .header("Authorization", bearerToken(USER_A)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].content").value("img2"))
+                .andExpect(jsonPath("$[1].content").value("img1"));
+    }
+
+    @Test
     void rejectsMessageAccessForNonParticipant() throws Exception {
         insertMessage(ROOM_1, USER_A, "비밀 메시지", 1);
 
@@ -634,11 +648,15 @@ class ChatIntegrationTests extends AbstractIntegrationTest {
     }
 
     private UUID insertMessage(UUID roomId, UUID userId, String content, long sequence) {
+        return insertMessage(roomId, userId, content, sequence, "textMessage");
+    }
+
+    private UUID insertMessage(UUID roomId, UUID userId, String content, long sequence, String type) {
         UUID id = UUID.randomUUID();
         jdbcTemplate.update(
                 "insert into public.messages (id, room_id, user_id, content, type, sequence) values "
                         + "(?, ?, ?, ?, cast(? as \"MessageType\"), ?)",
-                id, roomId, userId, content, "textMessage", sequence
+                id, roomId, userId, content, type, sequence
         );
         return id;
     }

@@ -71,6 +71,18 @@ public class ChatApplicationService {
     }
 
     /**
+     * 채팅방 이미지 갤러리(미리보기 3장 + 전체 목록) 전용 조회.
+     * 기존 post-initial-chat-data의 image_messages_by_room(최신순 32장)과 동일한 역할을 한다.
+     */
+    @Transactional(readOnly = true)
+    public List<MessageSummary> getRecentImages(MemberId memberId, RoomId roomId, int limit) {
+        requireParticipant(roomId, memberId);
+        int boundedLimit = Math.min(Math.max(limit, 1), MAX_MESSAGE_PAGE_SIZE);
+        List<MessageSummary> images = chatRepository.findRecentImageMessages(roomId, boundedLimit);
+        return filterBlockedAndHidden(memberId, images);
+    }
+
+    /**
      * 차단한(또는 차단당한) 상대의 메시지와, 내가 개인적으로 숨긴 메시지를 걸러낸다.
      * 기존 post-initial-chat-data Edge Function이 하던 필터링을 그대로 재현한다.
      */
