@@ -429,6 +429,31 @@ class ChatIntegrationTests extends AbstractIntegrationTest {
     }
 
     @Test
+    void returnsReadPositionsForAllParticipants() throws Exception {
+        // ROOM_2는 USER_A, USER_B 둘 다 참가(clearTables 기본값)
+        mockMvc.perform(patch("/api/v1/chat/rooms/" + ROOM_2 + "/read-position")
+                        .header("Authorization", bearerToken(USER_A))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"lastReadSequence\":5}"))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/v1/chat/rooms/" + ROOM_2 + "/read-positions")
+                        .header("Authorization", bearerToken(USER_B)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[?(@.memberId=='" + USER_A + "')].lastReadSequence").value(5))
+                .andExpect(jsonPath("$[?(@.memberId=='" + USER_B + "')].lastReadSequence").value(0));
+    }
+
+    @Test
+    void rejectsReadPositionsQueryFromNonParticipant() throws Exception {
+        mockMvc.perform(get("/api/v1/chat/rooms/" + ROOM_1 + "/read-positions")
+                        .header("Authorization", bearerToken(USER_B)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ROOM_NOT_FOUND"));
+    }
+
+    @Test
     void addsReactionEvenIfDuplicate() throws Exception {
         UUID messageId = insertMessage(ROOM_1, USER_A, "리액션 대상", 1);
 

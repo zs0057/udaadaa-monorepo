@@ -94,6 +94,7 @@ RLS는 전부 `is_room_participant(room_id)` SECURITY DEFINER 함수 기반이�
 | `GET` | `/api/v1/chat/rooms/{roomId}/messages?after={sequence}` | 순번 기준 메시지 조회(초기·페이지·복구 공용) |
 | `POST` | `/api/v1/chat/rooms/{roomId}/messages` | 메시지 저장(`clientMessageId` 포함), 저장 성공 시 즉시 응답 |
 | `PATCH` | `/api/v1/chat/rooms/{roomId}/read-position` | `lastReadSequence` 갱신 |
+| `GET` | `/api/v1/chat/rooms/{roomId}/read-positions` | 방 참가자 전원의 `lastReadSequence` 조회(2026-08-06 Flutter 전환 계획 중 추가 — 메시지별 "안읽음 N명" 표시를 클라이언트가 계산하려면 내 위치만으로는 불가능해서 필요해짐) |
 | STOMP `/topic/rooms/{roomId}` | 구독 | 저장 커밋 이후 내부 이벤트로 브로드캐스트 |
 | 내부 이벤트 | `ChatMessageCreated` | 메시지 저장 트랜잭션 커밋 후 발행 → STOMP 전달 + (3-4) Notification 트리거 |
 

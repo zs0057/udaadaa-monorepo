@@ -3,6 +3,7 @@ package com.udaadaa.chat.infrastructure;
 import com.udaadaa.chat.RoomId;
 import com.udaadaa.chat.domain.ChatRepository;
 import com.udaadaa.chat.domain.MessageSummary;
+import com.udaadaa.chat.domain.ReadPosition;
 import com.udaadaa.chat.domain.RoomSummary;
 import com.udaadaa.member.MemberId;
 import java.util.List;
@@ -136,6 +137,13 @@ class JpaChatRepository implements ChatRepository {
     @Override
     public void hideMessage(RoomId roomId, UUID messageId, MemberId memberId) {
         blockedMessageRepository.insertIfAbsent(memberId.value(), messageId, roomId.value());
+    }
+
+    @Override
+    public List<ReadPosition> findReadPositions(RoomId roomId) {
+        return roomParticipantRepository.findByRoomId(roomId.value()).stream()
+                .map(p -> new ReadPosition(MemberId.from(p.userId()), p.lastReadSequence()))
+                .toList();
     }
 
     private MessageSummary toMessageSummary(MessageJpaEntity entity) {

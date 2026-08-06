@@ -1,5 +1,6 @@
 package com.udaadaa.chat.infrastructure;
 
+import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -9,6 +10,8 @@ import org.springframework.data.repository.query.Param;
 interface SpringDataRoomParticipantRepository extends JpaRepository<RoomParticipantJpaEntity, RoomParticipantId> {
 
     boolean existsByRoomIdAndUserId(UUID roomId, UUID userId);
+
+    List<RoomParticipantJpaEntity> findByRoomId(UUID roomId);
 
     /**
      * 이미 참가 중이면 아무 것도 하지 않는다. 반환값이 0이면 이미 참가 중이었다는 뜻.
