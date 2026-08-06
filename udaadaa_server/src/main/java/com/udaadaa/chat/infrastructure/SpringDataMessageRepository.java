@@ -24,6 +24,19 @@ interface SpringDataMessageRepository extends JpaRepository<MessageJpaEntity, UU
     Optional<MessageJpaEntity> findByIdAndRoomId(UUID id, UUID roomId);
 
     /**
+     * 채팅방 이미지 갤러리(CHT-이미지 목록)용 — imageMessage 타입만, 최신순.
+     * type 컬럼이 native enum("MessageType")이라 파생 쿼리 대신 명시적 cast가 필요하다
+     * (insertIfAbsent와 같은 이유).
+     */
+    @Query(value = """
+            select * from public.messages
+            where room_id = :roomId and type = cast('imageMessage' as "MessageType")
+            order by sequence desc
+            limit :limit
+            """, nativeQuery = true)
+    List<MessageJpaEntity> findRecentImageMessages(@Param("roomId") UUID roomId, @Param("limit") int limit);
+
+    /**
      * 보낸 사람 본인만, 아직 삭제되지 않은 메시지만 소프트 삭제한다.
      * 영향받은 행이 0이면 없거나/다른 방이거나/본인 메시지가 아니거나/이미 삭제된 것.
      */

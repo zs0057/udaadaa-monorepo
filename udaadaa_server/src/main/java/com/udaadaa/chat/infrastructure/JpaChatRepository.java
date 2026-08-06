@@ -50,7 +50,10 @@ class JpaChatRepository implements ChatRepository {
                                 .orElse(null),
                         roomParticipantRepository.findByRoomIdAndUserId(room.id(), memberId.value())
                                 .map(RoomParticipantJpaEntity::lastReadSequence)
-                                .orElse(0L)
+                                .orElse(0L),
+                        roomParticipantRepository.findByRoomId(room.id()).stream()
+                                .map(p -> MemberId.from(p.userId()))
+                                .toList()
                 ))
                 .toList();
     }
@@ -74,6 +77,13 @@ class JpaChatRepository implements ChatRepository {
                         PageRequest.of(0, limit)
                 )
                 .stream()
+                .map(this::toMessageSummary)
+                .toList();
+    }
+
+    @Override
+    public List<MessageSummary> findRecentImageMessages(RoomId roomId, int limit) {
+        return messageRepository.findRecentImageMessages(roomId.value(), limit).stream()
                 .map(this::toMessageSummary)
                 .toList();
     }

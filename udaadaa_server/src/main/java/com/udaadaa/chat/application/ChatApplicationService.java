@@ -7,6 +7,8 @@ import com.udaadaa.chat.domain.MessageSummary;
 import com.udaadaa.chat.domain.ReadPosition;
 import com.udaadaa.chat.domain.RoomSummary;
 import com.udaadaa.member.MemberId;
+import com.udaadaa.member.MemberReader;
+import com.udaadaa.member.MemberSummary;
 import com.udaadaa.moderation.ModerationReader;
 import java.util.List;
 import java.util.Map;
@@ -28,15 +30,18 @@ public class ChatApplicationService {
 
     private final ChatRepository chatRepository;
     private final ModerationReader moderationReader;
+    private final MemberReader memberReader;
     private final ApplicationEventPublisher eventPublisher;
 
     ChatApplicationService(
             ChatRepository chatRepository,
             ModerationReader moderationReader,
+            MemberReader memberReader,
             ApplicationEventPublisher eventPublisher
     ) {
         this.chatRepository = chatRepository;
         this.moderationReader = moderationReader;
+        this.memberReader = memberReader;
         this.eventPublisher = eventPublisher;
     }
 
@@ -47,12 +52,34 @@ public class ChatApplicationService {
         return chatRepository.findRoomSummariesForMember(memberId);
     }
 
+    /**
+     * getRooms()가 반환한 RoomSummary들의 participantIds를 한 번에 닉네임으로 해석한다.
+     * Chat이 Member 데이터를 직접 저장하지 않으므로 표시용 닉네임은 요청 시점에 배치 조회한다
+     * (기존 post-initial-chat-data Edge Function이 rooms에 profiles를 임베드하던 것과 동일한 역할).
+     */
+    @Transactional(readOnly = true)
+    public Map<MemberId, MemberSummary> resolveMembers(Set<MemberId> memberIds) {
+        return memberReader.findAllByIds(memberIds);
+    }
+
     @Transactional(readOnly = true)
     public List<MessageSummary> getMessages(MemberId memberId, RoomId roomId, long afterSequence, int limit) {
         requireParticipant(roomId, memberId);
         int boundedLimit = Math.min(Math.max(limit, 1), MAX_MESSAGE_PAGE_SIZE);
         List<MessageSummary> messages = chatRepository.findMessagesAfter(roomId, afterSequence, boundedLimit);
         return filterBlockedAndHidden(memberId, messages);
+    }
+
+    /**
+     * 채팅방 이미지 갤러리(미리보기 3장 + 전체 목록) 전용 조회.
+     * 기존 post-initial-chat-data의 image_messages_by_room(최신순 32장)과 동일한 역할을 한다.
+     */
+    @Transactional(readOnly = true)
+    public List<MessageSummary> getRecentImages(MemberId memberId, RoomId roomId, int limit) {
+        requireParticipant(roomId, memberId);
+        int boundedLimit = Math.min(Math.max(limit, 1), MAX_MESSAGE_PAGE_SIZE);
+        List<MessageSummary> images = chatRepository.findRecentImageMessages(roomId, boundedLimit);
+        return filterBlockedAndHidden(memberId, images);
     }
 
     /**
