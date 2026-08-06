@@ -2,7 +2,7 @@
 
 > 상태: 구현 중 (Spring 코드 완료, 실제 Supabase 비교 완료, Flutter 전환 진행 중 — 실기기 회귀 테스트 남음)
 > 시작일: 2026-07-29
-> 진행 기록: [2026-07-29 Phase 1 진행 기록](../progress/2026-07-29-phase-01-progress.md), [2026-08-05 Flutter 전환 기록](../progress/2026-08-05-phase-01-flutter-transition.md)
+> 진행 기록: [2026-07-29 Phase 1 진행 기록](../progress/2026-07-29-phase-01-progress.md), [2026-08-06 Flutter 전환 기록](../progress/2026-08-06-phase-01-flutter-transition.md)
 
 ## 1. 목적
 
@@ -141,7 +141,7 @@ member/
 
 2026-07-29 Testcontainers PostgreSQL에서 전체 16개 테스트가 통과했다. Member 초기화·조회·수정은 Docker 로컬 DB에서도 검증했다.
 
-2026-08-05 실제 운영 Supabase 계정(개발자 본인 카카오 계정)으로 로그인해 Spring `GET /api/v1/members/me` 응답과 기존 Flutter 조회 결과가 일치함을 확인해 1-C를 완료로 전환했다. 같은 세션에서 Flutter `AuthCubit`의 조회·초기화·닉네임 수정 경로를 Spring API 호출로 전환했다(1-E). 다만 닉네임·키·몸무게 수정의 실기기 회귀 테스트와 이메일·Apple 로그인 경로 테스트가 남아 있어 1-E는 진행 중으로 유지한다. 상세: [2026-08-05 Flutter 전환 기록](../progress/2026-08-05-phase-01-flutter-transition.md).
+2026-08-06 실제 운영 Supabase 계정(개발자 본인 카카오 계정)으로 로그인해 Spring `GET /api/v1/members/me` 응답과 기존 Flutter 조회 결과가 일치함을 확인해 1-C를 완료로 전환했다. 같은 세션에서 Flutter `AuthCubit`의 조회·초기화·닉네임 수정 경로를 Spring API 호출로 전환했다(1-E). 다만 닉네임·키·몸무게 수정의 실기기 회귀 테스트와 이메일·Apple 로그인 경로 테스트가 남아 있어 1-E는 진행 중으로 유지한다. 상세: [2026-08-06 Flutter 전환 기록](../progress/2026-08-06-phase-01-flutter-transition.md).
 
 ## 9. 전환 원칙
 
