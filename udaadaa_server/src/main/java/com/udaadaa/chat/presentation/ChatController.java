@@ -90,6 +90,13 @@ class ChatController {
         chatApplicationService.updateReadPosition(currentMemberId(), RoomId.from(roomId), request.lastReadSequence());
     }
 
+    @GetMapping("/rooms/{roomId}/read-positions")
+    List<ReadPositionResponse> getReadPositions(@PathVariable UUID roomId) {
+        return chatApplicationService.getReadPositions(currentMemberId(), RoomId.from(roomId)).stream()
+                .map(ReadPositionResponse::from)
+                .toList();
+    }
+
     @PostMapping("/rooms/{roomId}/messages/{messageId}/reactions")
     ReactionResponse addReaction(
             @PathVariable UUID roomId,

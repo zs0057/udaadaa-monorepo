@@ -4,6 +4,7 @@ import com.udaadaa.chat.ChatMessageCreated;
 import com.udaadaa.chat.RoomId;
 import com.udaadaa.chat.domain.ChatRepository;
 import com.udaadaa.chat.domain.MessageSummary;
+import com.udaadaa.chat.domain.ReadPosition;
 import com.udaadaa.chat.domain.RoomSummary;
 import com.udaadaa.member.MemberId;
 import java.util.List;
@@ -101,6 +102,12 @@ public class ChatApplicationService {
     public void updateReadPosition(MemberId memberId, RoomId roomId, long lastReadSequence) {
         requireParticipant(roomId, memberId);
         chatRepository.updateReadPositionIfGreater(roomId, memberId, lastReadSequence);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ReadPosition> getReadPositions(MemberId memberId, RoomId roomId) {
+        requireParticipant(roomId, memberId);
+        return chatRepository.findReadPositions(roomId);
     }
 
     @Transactional

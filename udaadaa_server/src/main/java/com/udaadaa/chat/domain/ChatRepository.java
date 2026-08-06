@@ -83,4 +83,10 @@ public interface ChatRepository {
      * 내 화면에서만 이 메시지를 숨긴다(멱등, Moderation의 사용자 차단과는 별개 기능).
      */
     void hideMessage(RoomId roomId, UUID messageId, MemberId memberId);
+
+    /**
+     * 방 참가자 전원의 읽음 위치를 반환한다(메시지별 "안읽음 N명" 표시를 클라이언트가
+     * 계산할 수 있도록 — 이 모듈은 카운트 자체를 계산해주지 않고 원본 위치만 내려준다).
+     */
+    List<ReadPosition> findReadPositions(RoomId roomId);
 }
