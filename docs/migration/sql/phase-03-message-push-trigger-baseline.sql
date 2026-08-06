@@ -1,0 +1,60 @@
+-- Phase 3 (Chat + Notification) 준비: message-push 관련 기존 Postgres 트리거 baseline 캡처
+--
+-- 이 파일은 "적용용 마이그레이션"이 아니라 2026-08-06 시점 운영 DB(ccpcclfqofyvksajnrpg)에
+-- 이미 존재하는 트리거 정의를 그대로 기록해둔 참고 문서다. 그대로 실행하면 트리거가
+-- 이미 존재하므로 에러가 난다. Supabase 대시보드의 "Database Webhooks" UI로 만들어졌고
+-- 저장소 어디에도 정의가 없었던 것을 information_schema.triggers 조회로 확인해 옮겨 적었다.
+--
+-- 발견한 문제: message-push 트리거의 Authorization 헤더에 하드코딩된 service_role 키가
+-- post-initial-chat-data / stage-post-initial-chat-data Edge Function 소스에 있던 것과
+-- 동일한 유출 키다. 즉 이 키를 실제로 로테이션할 때는 아래 3개를 전부 같이 갱신해야 한다:
+--   1. post-initial-chat-data/index.ts (완료: 환경변수 방식으로 되돌림)
+--   2. stage-post-initial-chat-data/index.ts (완료: 환경변수 방식으로 되돌림)
+--   3. 이 트리거 정의 (미완료: 새 키로 ALTER 또는 재생성 필요)
+-- 추적: docs/migration/phases/phase-00-verification.md §7
+
+-- ============================================================
+-- 현재 baseline (2026-08-06, ccpcclfqofyvksajnrpg 기준)
+-- ============================================================
+
+-- messages 테이블: INSERT 시 message-push Edge Function 호출
+-- CREATE TRIGGER "message-push"
+--   AFTER INSERT ON public.messages
+--   FOR EACH ROW EXECUTE FUNCTION supabase_functions.http_request(
+--     'https://ccpcclfqofyvksajnrpg.supabase.co/functions/v1/message-push',
+--     'POST',
+--     '{"Content-type":"application/json","Authorization":"Bearer <REDACTED_LEAKED_SERVICE_ROLE_KEY>"}',
+--     '{}',
+--     '5000'
+--   );
+
+-- reactions 테이블: INSERT 시 reaction-push Edge Function 호출 (트리거 2개 중복 등록돼 있음 — Social Phase에서 정리 필요)
+-- CREATE TRIGGER "my_webhook"
+--   AFTER INSERT ON public.reactions
+--   FOR EACH ROW EXECUTE FUNCTION supabase_functions.http_request(
+--     'https://ccpcclfqofyvksajnrpg.supabase.co/functions/v1/reaction-push',
+--     'POST',
+--     '{"Content-Type":"application/json", "Authorization": "Bearer <anon key, 문제 없음>"}',
+--     '{}',
+--     '1000'
+--   );
+-- CREATE TRIGGER "reaction-push"
+--   AFTER INSERT ON public.reactions
+--   FOR EACH ROW EXECUTE FUNCTION supabase_functions.http_request(
+--     'https://ccpcclfqofyvksajnrpg.supabase.co/functions/v1/reaction-push',
+--     'POST',
+--     '{"Content-type":"application/json"}',  -- Authorization 헤더 자체가 없음(원인 미조사)
+--     '{}',
+--     '10000'
+--   );
+
+-- ============================================================
+-- Phase 3-4 배포 시점에 실행할 전환 마이그레이션 (아직 적용하지 않음)
+-- ============================================================
+-- Spring의 새 Notification 발송 경로(ChatMessageCreated 구독)가 검증되고 나면
+-- 이 트리거를 제거해 이중 Push를 방지한다. 새 경로 배포 직후, 같은 배포 창에서 실행:
+--
+-- drop trigger if exists "message-push" on public.messages;
+--
+-- 롤백이 필요하면(Spring Push가 실패하는 경우) 위 baseline의 CREATE TRIGGER 문을
+-- (키를 새로 로테이션된 값으로 교체한 뒤) 그대로 다시 실행해 복구한다.

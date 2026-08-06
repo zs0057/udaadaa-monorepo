@@ -144,7 +144,7 @@ Transaction Pooler(6543)는 Hibernate Prepared Statement와 충돌 가능성이 
 |---|---|---|---|
 | Supabase Legacy JWT Secret | JWT 검증 트러블슈팅 중 | Signing Key 로테이션 후 기존 키 Revoke (Edge Function 5개 동시 업데이트 필요, 6절 참고) | 보류 (2026-08-04, 운영 트래픽 사실상 중단 수준이라 즉시 위험 낮음으로 판단) |
 | `spring_app` DB Role 비밀번호 | DB 연결 트러블슈팅 중 | `ALTER ROLE spring_app WITH PASSWORD '새값'`로 교체, Spring 배포 환경 변수도 동기화 | 보류 (2026-08-04, Edge Function 의존성 없어 우선순위 높게 별도 예정) |
-| 운영·스테이징 Supabase `service_role` 키 (2건) | Phase 3 조사 중 `post-initial-chat-data`, `stage-post-initial-chat-data` 소스에 하드코딩된 채 git에 커밋돼 있던 것을 발견 | 코드는 즉시 환경변수 방식으로 되돌림(완료). 실제 키 무효화는 Supabase 대시보드에서만 가능한데, "Legacy anon, service_role API keys" 탭의 비활성화 버튼이 `anon`과 `service_role`을 동시에 끄는 단일 토글이라 지금 누르면 `anon` 키를 쓰는 Flutter 앱 전체가 즉시 중단됨. Flutter를 새 Publishable/Secret 키 체계로 옮기는 별도 작업 이후 처리 필요 | 보류 (2026-08-06, 코드 수정만 완료. 실제 키 무효화는 Flutter 새 키 체계 이전과 함께 별도 계획) |
+| 운영·스테이징 Supabase `service_role` 키 (총 3곳: Edge Function 2개 + `message-push` Postgres 트리거 1개) | Phase 3 조사 중 `post-initial-chat-data`, `stage-post-initial-chat-data` 소스에 하드코딩된 채 git에 커밋돼 있던 것을 발견. 이어서 `message-push` 트리거(`information_schema.triggers`)의 Authorization 헤더에도 동일 키가 박혀 있는 것을 확인 | Edge Function 2개는 코드를 환경변수 방식으로 되돌림(완료, 재배포는 별도). `message-push` 트리거는 baseline만 캡처해둠([SQL](../sql/phase-03-message-push-trigger-baseline.sql)). 실제 키 무효화는 Supabase 대시보드에서만 가능한데, "Legacy anon, service_role API keys" 탭의 비활성화 버튼이 `anon`과 `service_role`을 동시에 끄는 단일 토글이라 지금 누르면 `anon` 키를 쓰는 Flutter 앱 전체가 즉시 중단됨. Flutter를 새 Publishable/Secret 키 체계로 옮기는 별도 작업 이후 처리 필요. 로테이션 시 Edge Function 2개 + 이 트리거까지 총 3곳을 함께 갱신해야 함 | 보류 (2026-08-06, 코드·baseline 정리만 완료. 실제 키 무효화는 Flutter 새 키 체계 이전과 함께 별도 계획) |
 
 세 조치 모두 실제 로테이션 전까지 미해결 리스크로 남기며, 트래픽 재개 시점 또는 각 Phase 착수 전 처리한다.
 

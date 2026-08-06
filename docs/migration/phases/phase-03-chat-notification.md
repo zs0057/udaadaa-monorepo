@@ -77,11 +77,11 @@ RLS는 전부 `is_room_participant(room_id)` SECURITY DEFINER 함수 기반이�
 
 | ID | 항목 | 제안 | 비고 |
 |---|---|---|---|
-| CHT-01 | 실시간 전달 기술 | STOMP(WebSocket) 신규 도입 | TO-BE 아키텍처 문서 기준. Spring Boot에 `spring-boot-starter-websocket` 추가 필요 |
+| CHT-01 | 실시간 전달 기술 | STOMP(WebSocket) 신규 도입 (확정, 2026-08-06) | TO-BE 아키텍처 문서 기준. Spring Boot에 `spring-boot-starter-websocket` 추가 필요. 연결 관리·재연결·스케일 시 sticky session 운영 부담을 팀이 새로 떠안는다는 점 인지하고 승인함 |
 | CHT-02 | 메시지 정렬 기준 | `messages`에 `sequence BIGINT` 컬럼 추가(방별 단조 증가) | 기존 `created_at` 정렬을 유지하며 병행 추가(Expand), 안정화 후 전환(Switch) |
 | CHT-03 | 중복 방지 | `client_message_id` 컬럼 + UNIQUE(`room_id`, `client_message_id`) 추가 | Flutter가 UUID 생성해 전송 |
 | CHT-04 | Realtime 대체 시점 | 3-2 완료 후에도 당분간 Supabase Realtime 구독을 유지하고, STOMP 안정화 확인 후 제거 | 두 경로 동시 활성화 금지 원칙과 충돌하지 않도록 "받기만" 이중화하고 "쓰기"는 항상 단일 경로 유지 |
-| CHT-05 | DB Webhook 전환 | `message-push` Webhook을 끄는 시점을 3-4 배포와 동시에 진행 | 대시보드 설정이라 Spring 배포와 별도 운영 작업으로 체크리스트화 필요 |
+| CHT-05 | DB Webhook 전환 | `message-push` 트리거 정의를 마이그레이션 파일로 baseline 캡처(확정, 2026-08-06) 후 3-4 배포와 동시에 `DROP TRIGGER`로 전환 | 대시보드 UI 설정이 아니라 일반 Postgres 트리거(`supabase_functions.http_request`)로 확인됨. baseline: [phase-03-message-push-trigger-baseline.sql](../sql/phase-03-message-push-trigger-baseline.sql). 이 트리거 정의 자체에 유출된 `service_role` 키가 Authorization 헤더로 박혀 있어, 실제 키 로테이션 시 Edge Function 코드 2개뿐 아니라 이 트리거도 같이 갱신해야 함(Phase 0 Verification §7 추적) |
 | CHT-06 | 이미지 업로드 방식 | Spring이 업로드 가능 여부를 승인(발급된 경로/서명)한 뒤 Flutter가 Storage에 직접 업로드하는 현재 패턴 유지 | 이미지 자체를 Spring 서버로 프록시하지 않음(트래픽·비용 이유) |
 
 ## 5. 목표 API/이벤트 초안 (3-1, 3-2 우선)
@@ -130,7 +130,8 @@ notification/ (3-4)
 
 - Phase 0~2에서 만든 `spring_app` Role에 `rooms`, `room_participants`, `messages`, `chat_reactions`, `read_receipts`, `blocked_messages` 권한이 아직 없다 — 3-1 착수 전에 추가해야 한다.
 - Supabase Storage(`ImageMessages` 버킷) 접근 방식을 Spring이 어떻게 승인할지(서명 URL 등) 아직 결정되지 않았다.
-- `message-push`를 트리거하는 Database Webhook 설정이 코드로 관리되지 않아 전환 시점에 대시보드에서 수동으로 끄고 켜야 한다 — 실수로 이중 Push가 발생할 위험.
+- `message-push`를 트리거하는 것은 일반 Postgres 트리거이며 baseline을 마이그레이션 파일로 캡처해뒀다([참고](../sql/phase-03-message-push-trigger-baseline.sql)). 다만 3-4 배포와 `DROP TRIGGER` 실행 시점이 어긋나면 여전히 이중 Push가 발생할 수 있어, 같은 배포 창에서 순서대로 실행하는 절차를 3-4 착수 시 체크리스트로 만들어야 한다.
+- 이 트리거의 Authorization 헤더에 유출된 `service_role` 키가 그대로 박혀 있다(Edge Function 코드와 동일 키). 실제 로테이션 시 트리거도 같이 갱신 필요(Phase 0 Verification §7).
 - `mission_complete` RPC가 `messages`에 직접 insert하므로, 3-2에서 메시지 저장 주체를 Spring으로 완전히 옮기기 전까지는 미션 인증 메시지(`missionMessage`)만 예외적으로 기존 RPC 경로가 남는다. Phase 5와 순서를 맞춰야 한다.
 - STOMP는 이 프로젝트에 전혀 없던 신규 기술이라 팀 러닝 커브·운영 부담(연결 수 관리, 재연결, 로드밸런싱 시 sticky session 등)이 다른 Phase보다 크다.
 
