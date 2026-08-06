@@ -261,11 +261,16 @@ class ChatBubble extends StatelessWidget {
                                                   try {
                                                     context
                                                         .read<ChatCubit>()
-                                                        .deleteMessage(message
-                                                                .customProperties?[
-                                                                    'message']
+                                                        .deleteMessage(
+                                                            message.customProperties?[
+                                                                        'message']
+                                                                    .roomId ??
+                                                                "",
+                                                            message
+                                                                    .customProperties?[
+                                                                        'message']
                                                                 .id ??
-                                                            "");
+                                                                "");
                                                     debugPrint(
                                                         '메시지 삭제 요청 성공: ${message.customProperties?['message'].id}');
                                                   } catch (e) {

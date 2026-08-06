@@ -3,9 +3,8 @@ import 'package:udaadaa/utils/constant.dart';
 
 /// Spring Chat API(`/api/v1/chat`) 전용 클라이언트.
 ///
-/// Phase 3 읽기 경로 전환 범위: 방 목록·메시지·이미지 갤러리·읽음 위치 조회만 다룬다.
-/// 쓰기 경로(메시지 전송, 참가/나가기, 반응, 삭제/숨김, 이미지 업로드 승인)는
-/// 별도 단계(Flutter 전환 B/C)에서 이 클라이언트에 메서드를 추가한다.
+/// 조회(방 목록·메시지·이미지 갤러리·읽음 위치)와 쓰기(메시지 전송, 참가/나가기,
+/// 반응, 삭제/숨김, 이미지 업로드 경로 발급)를 모두 다룬다.
 class ChatApiClient {
   ChatApiClient()
       : _dio = Dio(
@@ -92,6 +91,72 @@ class ChatApiClient {
       options: await _authOptions(),
     );
     return List<Map<String, dynamic>>.from(response.data as List);
+  }
+
+  /// 방에 참가한다(참가자 테이블에 나를 추가). 이미 참가 중이면 서버가 에러를 던진다.
+  Future<void> joinRoom(String roomId) async {
+    await _dio.post(
+      '/api/v1/chat/rooms/$roomId/participants',
+      options: await _authOptions(),
+    );
+  }
+
+  /// 방 참가를 취소한다(참가자 테이블에서 나를 제거).
+  Future<void> leaveRoom(String roomId) async {
+    await _dio.delete(
+      '/api/v1/chat/rooms/$roomId/participants/me',
+      options: await _authOptions(),
+    );
+  }
+
+  /// 메시지를 소프트 삭제한다(is_deleted=true). 실시간 반영은 기존 Supabase Realtime
+  /// UPDATE 리스너가 그대로 받는다 — 어느 서비스가 UPDATE했는지와 무관하게
+  /// Postgres 행 변경이므로 STOMP 쪽에 별도 처리를 추가할 필요가 없다.
+  Future<void> deleteMessage(String roomId, String messageId) async {
+    await _dio.delete(
+      '/api/v1/chat/rooms/$roomId/messages/$messageId',
+      options: await _authOptions(),
+    );
+  }
+
+  /// 메시지를 나에게만 숨긴다(신고/차단 성격의 "안 보이게" 기능).
+  Future<void> hideMessage(String roomId, String messageId) async {
+    await _dio.post(
+      '/api/v1/chat/rooms/$roomId/messages/$messageId/hide',
+      options: await _authOptions(),
+    );
+  }
+
+  /// 메시지에 이모지 반응을 추가한다.
+  Future<String> addReaction(
+    String roomId,
+    String messageId,
+    String content,
+  ) async {
+    final response = await _dio.post(
+      '/api/v1/chat/rooms/$roomId/messages/$messageId/reactions',
+      data: {'content': content},
+      options: await _authOptions(),
+    );
+    return (response.data as Map<String, dynamic>)['id'] as String;
+  }
+
+  /// 반응을 제거한다.
+  Future<void> removeReaction(String roomId, String reactionId) async {
+    await _dio.delete(
+      '/api/v1/chat/rooms/$roomId/reactions/$reactionId',
+      options: await _authOptions(),
+    );
+  }
+
+  /// 이미지 업로드용 경로를 서버에서 발급받는다(CHT-06: "경로만 발급" —
+  /// 실제 업로드는 여전히 Flutter가 Supabase Storage로 직접 한다).
+  Future<String> approveImageUpload(String roomId) async {
+    final response = await _dio.post(
+      '/api/v1/chat/rooms/$roomId/image-uploads',
+      options: await _authOptions(),
+    );
+    return (response.data as Map<String, dynamic>)['path'] as String;
   }
 }
 
