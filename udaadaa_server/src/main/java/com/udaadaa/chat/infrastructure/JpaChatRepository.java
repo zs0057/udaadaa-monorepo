@@ -6,6 +6,7 @@ import com.udaadaa.chat.domain.MessageSummary;
 import com.udaadaa.chat.domain.RoomSummary;
 import com.udaadaa.member.MemberId;
 import java.util.List;
+import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 
@@ -57,6 +58,30 @@ class JpaChatRepository implements ChatRepository {
                 .stream()
                 .map(this::toMessageSummary)
                 .toList();
+    }
+
+    @Override
+    public MessageSummary saveMessage(
+            RoomId roomId,
+            MemberId senderId,
+            UUID clientMessageId,
+            String type,
+            String content,
+            String imagePath
+    ) {
+        messageRepository.insertIfAbsent(
+                roomId.value(),
+                senderId.value(),
+                content,
+                type,
+                imagePath,
+                clientMessageId
+        );
+        return messageRepository.findByRoomIdAndClientMessageId(roomId.value(), clientMessageId)
+                .map(this::toMessageSummary)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Message insert did not fail but the row could not be found afterwards"
+                ));
     }
 
     private MessageSummary toMessageSummary(MessageJpaEntity entity) {

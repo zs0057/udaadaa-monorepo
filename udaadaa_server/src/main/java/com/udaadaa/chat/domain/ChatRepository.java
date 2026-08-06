@@ -3,6 +3,7 @@ package com.udaadaa.chat.domain;
 import com.udaadaa.chat.RoomId;
 import com.udaadaa.member.MemberId;
 import java.util.List;
+import java.util.UUID;
 
 public interface ChatRepository {
 
@@ -21,4 +22,17 @@ public interface ChatRepository {
      * afterSequence보다 큰 순번의 메시지를 오름차순으로 최대 limit개 반환한다.
      */
     List<MessageSummary> findMessagesAfter(RoomId roomId, long afterSequence, int limit);
+
+    /**
+     * 메시지를 저장한다. 같은 (roomId, clientMessageId) 조합이 이미 있으면 새로 만들지 않고
+     * 기존 메시지를 그대로 반환한다(재전송 멱등 처리, CHT-03).
+     */
+    MessageSummary saveMessage(
+            RoomId roomId,
+            MemberId senderId,
+            UUID clientMessageId,
+            String type,
+            String content,
+            String imagePath
+    );
 }

@@ -32,6 +32,11 @@ class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(requests -> requests
                         .requestMatchers("/actuator/health", "/actuator/health/**", "/error").permitAll()
+                        // STOMP 핸드셰이크(HTTP Upgrade) 자체는 열어두고, 실제 인증은
+                        // STOMP CONNECT 프레임 단계에서 ChatChannelInterceptor가 수행한다.
+                        // (WebSocket 핸드셰이크에 Authorization 헤더를 못 붙이는 클라이언트가 있어
+                        // STOMP 프로토콜 레벨 헤더로 인증하는 표준 패턴을 따른다.)
+                        .requestMatchers("/ws/chat/**").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(resourceServer -> resourceServer
                         .jwt(Customizer.withDefaults())
