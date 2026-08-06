@@ -44,9 +44,9 @@ Udaadaa는 채팅과 챌린지를 통해 사용자가 건강 목표를 꾸준히
     - 사용자 차단과 공통 상호작용 허용 규칙을 Spring으로 이전합니다.
     - 현재 상태: Spring Moderation 모듈(차단 생성·해제·조회·양방향 상호작용 확인 API)과 Flutter 전환 완료, 로컬 `./gradlew test` 통과 확인. 실기기 테스트는 전체 Phase 종료 후 일괄 진행 예정
     - 상세 문서: [Phase 2 Moderation](docs/migration/phases/phase-02-moderation.md), [2026-08-06 구현 기록](docs/migration/progress/2026-08-06-phase-02-moderation-implementation.md)
-  - [ ] **Phase 3 — Chat + Notification** · 구현 중 (3-1)
+  - [ ] **Phase 3 — Chat + Notification** · 구현 중 (Flutter 전환 D)
     - 채팅 저장·STOMP 전달·누락 복구·읽음·Push를 이전합니다.
-    - 현재 상태: 계획(CHT-01~06) 승인 완료. 3-1(채팅 조회·복구) 착수 — `messages` sequence/client_message_id 컬럼 Expand·백필 완료, Spring `chat` 조회 모듈 코드 완료(로컬 테스트 확인 대기), Flutter 전환은 아직. 조사 중 발견한 `service_role` 키 유출은 코드 수정 완료·로테이션 보류(Phase 0 Verification §7 참고)
+    - 현재 상태: 서버 3-1~3-4(조회·저장+STOMP·참가/반응/삭제/숨김/이미지업로드·Notification) 코드 완료. Flutter 전환 A~D(읽기, 쓰기+STOMP, 참가/반응/삭제/숨김/이미지업로드, 읽음 위치+안읽음 배지) 완료 — A~C는 병합 완료, D는 로컬 빌드 확인 대기. D 작업 중 읽음 위치 실시간 브로드캐스트(`ReadPositionUpdated` + STOMP)를 계획에 없던 추가 범위로 구현했다. 기존 `message-push` DB 트리거는 Spring Push 검증 전까지 병행 유지 중. 조사 중 발견한 `service_role` 키 유출은 코드 수정 완료·로테이션 보류(Phase 0 Verification §7 참고)
     - 상세 문서: [Phase 3 Chat + Notification](docs/migration/phases/phase-03-chat-notification.md), [2026-08-06 3-1 구현 기록](docs/migration/progress/2026-08-06-phase-03-3-1-implementation.md)
   - [ ] **Phase 4 — Challenge** · 예정
     - 챌린지 참여·기간·미션 진행과 성공 판정을 이전합니다.

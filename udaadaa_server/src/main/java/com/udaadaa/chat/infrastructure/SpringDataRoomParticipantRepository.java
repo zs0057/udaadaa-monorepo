@@ -30,15 +30,17 @@ interface SpringDataRoomParticipantRepository extends JpaRepository<RoomParticip
     void deleteByRoomIdAndUserId(UUID roomId, UUID userId);
 
     /**
-     * 뒤로 가는 값은 무시하도록 GREATEST로 원자적으로 갱신한다.
+     * 뒤로 가는 값(또는 동일한 값)은 무시하고, 실제로 전진했을 때만 갱신한다.
+     * 반환값(영향받은 행 수)으로 실제 갱신 여부를 판단해 STOMP 브로드캐스트 여부를 결정한다
+     * (읽음 위치가 그대로인데 매번 이벤트를 쏘지 않기 위함).
      */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
             update public.room_participants
-            set last_read_sequence = greatest(last_read_sequence, :lastReadSequence)
-            where room_id = :roomId and user_id = :userId
+            set last_read_sequence = :lastReadSequence
+            where room_id = :roomId and user_id = :userId and last_read_sequence < :lastReadSequence
             """, nativeQuery = true)
-    void updateLastReadSequenceIfGreater(
+    int updateLastReadSequenceIfGreater(
             @Param("roomId") UUID roomId,
             @Param("userId") UUID userId,
             @Param("lastReadSequence") long lastReadSequence

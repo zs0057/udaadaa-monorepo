@@ -70,7 +70,9 @@ class Message {
         type = map['type'],
         isMine = map['user_id'] == myUserId,
         isDeleted = map['is_deleted'],
-        sequence = null;
+        // Realtime CDC 페이로드도 messages 테이블의 실제 컬럼이라 sequence를 담고 있다
+        // (3-1에서 추가된 컬럼). 읽음 위치 PATCH에 필요해서 여기서도 채운다.
+        sequence = (map['sequence'] as num?)?.toInt();
 
   /// Spring Chat API 응답(`MessageSummaryResponse`) 파싱 전용.
   ///

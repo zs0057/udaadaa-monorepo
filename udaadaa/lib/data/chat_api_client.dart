@@ -93,6 +93,15 @@ class ChatApiClient {
     return List<Map<String, dynamic>>.from(response.data as List);
   }
 
+  /// 내 읽음 위치를 갱신한다. 뒤로 가는 값은 서버가 조용히 무시한다(멱등).
+  Future<void> updateReadPosition(String roomId, int lastReadSequence) async {
+    await _dio.patch(
+      '/api/v1/chat/rooms/$roomId/read-position',
+      data: {'lastReadSequence': lastReadSequence},
+      options: await _authOptions(),
+    );
+  }
+
   /// 방에 참가한다(참가자 테이블에 나를 추가). 이미 참가 중이면 서버가 에러를 던진다.
   Future<void> joinRoom(String roomId) async {
     await _dio.post(

@@ -68,8 +68,9 @@ public interface ChatRepository {
 
     /**
      * lastReadSequence가 기존 값보다 클 때만 갱신한다(뒤로 가는 값은 무시, 원자적 처리).
+     * 실제로 갱신됐으면 true — 호출부가 이 값으로 STOMP 읽음 위치 브로드캐스트 여부를 결정한다.
      */
-    void updateReadPositionIfGreater(RoomId roomId, MemberId memberId, long lastReadSequence);
+    boolean updateReadPositionIfGreater(RoomId roomId, MemberId memberId, long lastReadSequence);
 
     /**
      * 메시지에 반응(이모지)을 추가한다. 기존 운영 데이터와 동일하게 중복 반응도 허용한다
