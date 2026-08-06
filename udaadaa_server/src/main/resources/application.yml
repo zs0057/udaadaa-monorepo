@@ -40,6 +40,12 @@ app:
       audience: ${SUPABASE_JWT_AUDIENCE:authenticated}
       hmac-secret: ${SUPABASE_JWT_SECRET:}
       jwk-set-uri: ${SUPABASE_JWT_JWK_SET_URI:}
+  notification:
+    fcm:
+      enabled: ${FCM_ENABLED:true}
+      project-id: ${FCM_PROJECT_ID:udaadaa}
+      client-email: ${FCM_CLIENT_EMAIL:}
+      private-key: ${FCM_PRIVATE_KEY:}
 
 logging:
   pattern:
