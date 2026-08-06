@@ -1,6 +1,7 @@
 package com.udaadaa.chat.application;
 
 import com.udaadaa.chat.ChatMessageCreated;
+import com.udaadaa.chat.ReadPositionUpdated;
 import com.udaadaa.chat.RoomId;
 import com.udaadaa.chat.domain.ChatRepository;
 import com.udaadaa.chat.domain.MessageSummary;
@@ -161,7 +162,12 @@ public class ChatApplicationService {
     @Transactional
     public void updateReadPosition(MemberId memberId, RoomId roomId, long lastReadSequence) {
         requireParticipant(roomId, memberId);
-        chatRepository.updateReadPositionIfGreater(roomId, memberId, lastReadSequence);
+        boolean advanced = chatRepository.updateReadPositionIfGreater(roomId, memberId, lastReadSequence);
+        if (advanced) {
+            // 커밋 이후에만 STOMP로 전달되도록 ChatMessageCreated와 동일한 방식으로 발행한다
+            // (ReadPositionBroadcaster가 AFTER_COMMIT에서 구독).
+            eventPublisher.publishEvent(new ReadPositionUpdated(roomId, memberId, lastReadSequence));
+        }
     }
 
     @Transactional(readOnly = true)

@@ -139,6 +139,10 @@ notification/ (3-4)
 
 실기기 테스트는 Phase 1·2와 동일하게 전체 마이그레이션 종료 후 일괄 진행 원칙을 유지하되, **Phase 3은 실시간성이 핵심 기능이라 3-2 완료 시점에는 최소한 로컬/스테이징에서 한 번은 실제 기기로 확인하는 예외를 두는 것을 권장**(일반 CRUD와 달리 STOMP 연결 자체의 성립 여부는 자동 테스트만으로 완전히 보장하기 어려움).
 
+2026-08-06 Flutter 전환 A~C 완료 및 병합: 읽기 경로(rooms/messages GET), 쓰기 경로(메시지 전송 REST + STOMP 실시간 수신, 기존 Supabase Realtime은 당분간 병행 유지 — CHT-04), 참가/나가기/반응/삭제/숨김/이미지업로드 승인까지 전부 Spring REST로 전환했다. 전환 과정에서 발견한 갭 2건도 함께 처리: `GET /rooms` 참가자 닉네임 목록 추가, 채팅방 이미지 갤러리 조회 API(`GET /rooms/{roomId}/images`) 신설.
+
+2026-08-06 Flutter 전환 D(읽음 위치·안읽음 배지) 구현: `sendReadReceipt`(방을 열어둔 채 새 메시지를 받을 때)와 `enterRoom1`(방 진입 시 몰아서 읽음 처리)을 메시지별 `read_receipts` upsert 대신 `PATCH /rooms/{roomId}/read-position` 호출로 바꿨다. 메시지 옆 "안읽음 N명" 배지는 예전엔 메시지마다 있던 `read_receipts` row 개수로 계산했는데, 새 API는 방별 `lastReadSequence` 하나만 갱신하므로 그 방식이 통하지 않는다 — 그래서 방 참가자 전원의 읽음 위치(`GET /rooms/{roomId}/read-positions`)와 각 메시지의 `sequence`를 비교해 "누가 이 메시지를 읽었는지"를 클라이언트가 역산하는 방식(`_recomputeReadReceiptsForRoom`)으로 바꿨다. 다른 참가자가 읽었을 때도 배지가 즉시 줄어들도록, 원래 계획에는 없었지만 백엔드에 읽음 위치 전용 내부 이벤트(`ReadPositionUpdated`, 실제로 값이 전진했을 때만 발행)와 STOMP 브로드캐스트(`ReadPositionBroadcaster`)를 새로 추가했다 — 기존 메시지 브로드캐스트와 같은 `/topic/rooms/{roomId}` 토픽을 공유하고 `eventType` 필드(`"message"`/`"readPosition"`)로 구분한다(필드가 없는 구버전 페이로드는 안전하게 "message"로 취급). 이 김에 FCM 백그라운드 Push 수신 시 상태를 새로고침하던 `refreshAllMessagesForPush`도 손봤다 — 이 함수가 여전히 `loadChatList`/`fetchLatestMessages`/`fetchLatestReceipt` 등 Phase A 이전의 Supabase 직접 조회 경로를 쓰고 있어서(전환 당시 놓친 호출부), 새 쓰기 경로 전환 이후로는 갈수록 부정확해질 상황이었다 — `_loadRoomsAndMessages()`(Spring REST 기반) 호출로 통일했다.
+
 ## 8. 선행 조건과 위험
 
 - ~~Phase 0~2에서 만든 `spring_app` Role에 `rooms`, `room_participants`, `messages`, `chat_reactions`, `read_receipts`, `blocked_messages` 권한이 아직 없다~~ 2026-08-06 SELECT 권한 부여 완료([SQL](../../../udaadaa_server/scripts/db-admin/phase-03-spring-app-chat-read-grant.sql)). INSERT/UPDATE/DELETE는 3-2 착수 시 추가.

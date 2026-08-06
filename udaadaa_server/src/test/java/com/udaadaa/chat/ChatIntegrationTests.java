@@ -29,6 +29,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 
 @AutoConfigureMockMvc
+@org.springframework.test.context.event.RecordApplicationEvents
 class ChatIntegrationTests extends AbstractIntegrationTest {
 
     private static final UUID USER_A = UUID.fromString("4fa5a560-d4d2-41f3-b218-c84ac2a2f847");
@@ -500,6 +501,37 @@ class ChatIntegrationTests extends AbstractIntegrationTest {
                         .header("Authorization", bearerToken(USER_B)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ROOM_NOT_FOUND"));
+    }
+
+    @Test
+    void publishesReadPositionUpdatedOnlyWhenSequenceActuallyAdvances(
+            org.springframework.test.context.event.ApplicationEvents events
+    ) throws Exception {
+        insertMessage(ROOM_1, USER_A, "1", 1);
+
+        // 1) 전진하는 값 → 이벤트가 발행돼야 한다(ReadPositionBroadcaster가 이걸로 STOMP를 쏜다)
+        mockMvc.perform(patch("/api/v1/chat/rooms/" + ROOM_1 + "/read-position")
+                        .header("Authorization", bearerToken(USER_A))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"lastReadSequence\":1}"))
+                .andExpect(status().isNoContent());
+
+        org.assertj.core.api.Assertions.assertThat(
+                events.stream(ReadPositionUpdated.class).toList()
+        ).hasSize(1).first().satisfies(event -> {
+            org.assertj.core.api.Assertions.assertThat(event.roomId().value()).isEqualTo(ROOM_1);
+            org.assertj.core.api.Assertions.assertThat(event.memberId().value()).isEqualTo(USER_A);
+            org.assertj.core.api.Assertions.assertThat(event.lastReadSequence()).isEqualTo(1L);
+        });
+
+        // 2) 같은 값으로 다시 갱신 시도 → 실제 전진이 없으므로 이벤트가 또 발행되면 안 된다
+        mockMvc.perform(patch("/api/v1/chat/rooms/" + ROOM_1 + "/read-position")
+                        .header("Authorization", bearerToken(USER_A))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"lastReadSequence\":1}"))
+                .andExpect(status().isNoContent());
+
+        org.assertj.core.api.Assertions.assertThat(events.stream(ReadPositionUpdated.class).toList()).hasSize(1);
     }
 
     @Test

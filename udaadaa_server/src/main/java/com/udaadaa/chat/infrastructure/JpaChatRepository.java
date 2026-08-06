@@ -128,8 +128,9 @@ class JpaChatRepository implements ChatRepository {
     }
 
     @Override
-    public void updateReadPositionIfGreater(RoomId roomId, MemberId memberId, long lastReadSequence) {
-        roomParticipantRepository.updateLastReadSequenceIfGreater(roomId.value(), memberId.value(), lastReadSequence);
+    public boolean updateReadPositionIfGreater(RoomId roomId, MemberId memberId, long lastReadSequence) {
+        return roomParticipantRepository.updateLastReadSequenceIfGreater(
+                roomId.value(), memberId.value(), lastReadSequence) > 0;
     }
 
     @Override

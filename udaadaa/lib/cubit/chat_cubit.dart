@@ -52,8 +52,15 @@ class ChatCubit extends Cubit<ChatState> {
   Map<String, List<String>> unreadMessageIdsByRoom = {};
 
   /// 방별 내 읽음 위치(lastReadSequence). GET /rooms 응답에서 채우고,
-  /// Flutter 전환 D(읽음 위치 쓰기)에서 갱신 로직이 추가될 예정이다.
+  /// sendReadReceipt·enterRoom1이 PATCH read-position 호출 후 갱신한다.
   Map<String, int> myLastReadSequenceByRoom = {};
+
+  /// 방별 참가자 전원의 읽음 위치(memberId → lastReadSequence).
+  /// GET /rooms/{roomId}/read-positions로 채우고, STOMP readPosition 이벤트로
+  /// 실시간 갱신한다. 메시지 하나하나의 "안읽음 N명" 배지(message.readReceipts)는
+  /// 이 맵과 message.sequence를 비교해 _recomputeReadReceiptsForRoom이 계산한다
+  /// (예전처럼 메시지별 read_receipts row가 더 이상 없기 때문).
+  Map<String, Map<String, int>> readPositionsByRoom = {};
 
   final AuthCubit authCubit;
   late final StreamSubscription authSubscription;
@@ -329,6 +336,18 @@ class ChatCubit extends Cubit<ChatState> {
       }
 
       try {
+        final positionsData = await chatApiClient.getReadPositions(room.id);
+        readPositionsByRoom[room.id] = {
+          for (final p in positionsData)
+            p['memberId'] as String: (p['lastReadSequence'] as num).toInt(),
+        };
+        _recomputeReadReceiptsForRoom(room.id);
+      } catch (e) {
+        logger.e("⛔ [${room.roomName}] 읽음 위치 로드 실패: $e");
+        readPositionsByRoom[room.id] = {};
+      }
+
+      try {
         final imgData = await chatApiClient.getRecentImages(room.id, limit: 32);
         imageMessages[room.id] = imgData
             .map((m) => Message.fromSpringMap(
@@ -349,6 +368,30 @@ class ChatCubit extends Cubit<ChatState> {
         imageMessages[room.id] = [];
       }
     }));
+  }
+
+  /// readPositionsByRoom[roomId](참가자별 lastReadSequence)과 각 메시지의 sequence를
+  /// 비교해 messages[roomId]의 readReceipts(그 메시지를 읽은 사람 id 집합)를 다시 계산한다.
+  ///
+  /// 예전엔 메시지 하나마다 read_receipts row가 있어서 "누가 이 메시지를 읽었는지"를 직접
+  /// 알 수 있었지만, 새 API는 방별 lastReadSequence 하나만 갱신한다(CHT 로드맵 3-1).
+  /// 그래서 "lastReadSequence가 이 메시지의 sequence 이상인 사람 = 이 메시지를 읽은 사람"으로
+  /// 역산한다. chat_bubble.dart의 "안읽음 N명" 배지(memberCount - readReceipts.length)는
+  /// 그대로 두고 이 함수가 채우는 값만 바꿨다.
+  void _recomputeReadReceiptsForRoom(String roomId) {
+    final positions = readPositionsByRoom[roomId];
+    final roomMessages = messages[roomId];
+    if (positions == null || roomMessages == null) return;
+
+    messages[roomId] = roomMessages.map((message) {
+      final seq = message.sequence;
+      if (seq == null) return message;
+      final readers = positions.entries
+          .where((entry) => entry.value >= seq)
+          .map((entry) => entry.key)
+          .toSet();
+      return message.copyWith(readReceipts: readers);
+    }).toList();
   }
 
   // Future<void> _initialize() async {
@@ -404,19 +447,14 @@ class ChatCubit extends Cubit<ChatState> {
   //   }
   // }
 
+  /// Push 수신 시 전체 상태를 새로고침한다. 예전엔 Supabase를 5단계로 나눠 직접
+  /// 호출했는데(loadChatList/fetchLatestMessages/fetchLatestReceipt/loadInitialMessages1/
+  /// fetchUnreadMessageIdsAfterLatestReceipt), 그중 read_receipts 기반 읽음 계산은
+  /// Flutter 전환 D 이후로는 새 쓰기가 없는 죽은 테이블을 읽는 셈이라 더 이상 정확하지
+  /// 않다. _loadRoomsAndMessages()(Spring REST + sequence 기반)로 통일한다.
   Future<void> refreshAllMessagesForPush() async {
     try {
-      // 1️⃣ 기존 모든 메시지 초기화
-      messages.clear();
-
-      await loadChatList();
-      await fetchLatestMessages();
-      await fetchLatestReceipt();
-
-      await Future.wait([
-        loadInitialMessages1(),
-        fetchUnreadMessageIdsAfterLatestReceipt(),
-      ]);
+      await _loadRoomsAndMessages();
 
       // ✅ 현재 방에 다시 입장 처리
       if (currentRoomId != null) {
@@ -1212,7 +1250,7 @@ class ChatCubit extends Cubit<ChatState> {
           });
 
           if (message.roomId == currentRoomId) {
-            sendReadReceipt(message.roomId, message.id!);
+            sendReadReceipt(message.roomId, message.id!, message.sequence);
           } else {
             unreadMessageIdsByRoom[message.roomId] ??=
                 []; // 리스트가 없다면 빈 리스트로 초기화
@@ -1315,6 +1353,13 @@ class ChatCubit extends Cubit<ChatState> {
   }
 
   void _handleStompMessage(String roomId, Map<String, dynamic> payload) {
+    // 같은 /topic/rooms/{roomId} 토픽에 메시지·읽음위치 이벤트가 같이 온다.
+    // eventType이 없으면(구버전 서버 호환) 기존처럼 메시지로 취급한다.
+    if (payload['eventType'] == 'readPosition') {
+      _handleReadPositionEvent(roomId, payload);
+      return;
+    }
+
     if (blockedUsers.contains(payload['senderId'])) return;
 
     final myUserId = supabase.auth.currentUser!.id;
@@ -1340,6 +1385,26 @@ class ChatCubit extends Cubit<ChatState> {
     );
 
     _ingestStompMessage(message);
+  }
+
+  /// ReadPositionBroadcastPayload 수신 처리 — 다른 참가자(또는 내 다른 기기)가
+  /// 읽음 위치를 갱신했을 때 실시간으로 온다. 방을 열어두고 있으면 "안읽음 N명" 배지가
+  /// 즉시 줄어든다.
+  void _handleReadPositionEvent(String roomId, Map<String, dynamic> payload) {
+    final memberId = payload['memberId'] as String?;
+    final lastReadSequence = (payload['lastReadSequence'] as num?)?.toInt();
+    if (memberId == null || lastReadSequence == null) return;
+
+    final positions = readPositionsByRoom[roomId] ??= {};
+    final current = positions[memberId] ?? 0;
+    if (lastReadSequence <= current) return; // 뒤로 가는 값(또는 중복)은 무시
+
+    positions[memberId] = lastReadSequence;
+    if (memberId == supabase.auth.currentUser?.id) {
+      myLastReadSequenceByRoom[roomId] = lastReadSequence;
+    }
+    _recomputeReadReceiptsForRoom(roomId);
+    emit(ChatMessageLoaded());
   }
 
   /// 재연결 시(onConnect가 다시 호출될 때마다) 끊겨있던 동안 놓친 메시지를 REST로 따라잡는다.
@@ -1417,7 +1482,7 @@ class ChatCubit extends Cubit<ChatState> {
     });
 
     if (message.roomId == currentRoomId) {
-      sendReadReceipt(message.roomId, message.id!);
+      sendReadReceipt(message.roomId, message.id!, message.sequence);
     } else {
       unreadMessageIdsByRoom[message.roomId] ??= [];
       unreadMessageIdsByRoom[message.roomId]!.add(message.id!);
@@ -1516,8 +1581,9 @@ class ChatCubit extends Cubit<ChatState> {
       if (res.status == 200 && data != null && data['room_id'] != null) {
         final roomId = data['room_id'] as String;
         logger.d("✅ Edge Function 매칭된 room_id: $roomId");
+        // joinRoom() 안에서 이미 _loadRoomsAndMessages()로 안읽음 상태까지 다시 계산한다
+        // (read_receipts 기반 재계산은 Flutter 전환 D 이후로는 죽은 테이블을 읽는 셈이라 제거).
         await joinRoom(roomId);
-        await fetchUnreadMessageIdsAfterLatestReceipt(emitLoaded: true);
       } else {
         logger.e("⛔ 방 이름 매칭 실패: ${data?['error'] ?? 'Unknown'}");
         emit(JoinRoomFailed("방을 찾을 수 없습니다.")); // ❌ 실패 시 상태
@@ -1601,7 +1667,7 @@ class ChatCubit extends Cubit<ChatState> {
     try {
       currentRoomId = roomId;
 
-      // 1. 읽지 않은 메시지 ID 목록 가져오기
+      // 1. 읽지 않은 메시지 ID 목록 가져오기(방별 최신 sequence까지 한 번에 읽음 처리한다)
       final unreadMessageIds = unreadMessageIdsByRoom[roomId] ?? [];
       debugPrint("📥 읽지 않은 메시지 ID들: $unreadMessageIds");
 
@@ -1611,84 +1677,41 @@ class ChatCubit extends Cubit<ChatState> {
         return;
       }
 
-      // 2. 읽음 영수증 생성
-      final readReceiptsMap = unreadMessageIds.map((messageId) {
-        return {
-          'room_id': roomId,
-          'message_id': messageId,
-          'user_id': supabase.auth.currentUser!.id,
-        };
-      }).toList();
+      // 2. 방에 로드된 메시지 중 최신 sequence를 내 읽음 위치로 올린다.
+      //    (메시지 하나하나 read_receipts row를 만들던 예전 방식 대신, 방별
+      //    lastReadSequence 하나만 PATCH — CHT 로드맵 3-1)
+      final roomMessages = messages[roomId] ?? [];
+      final maxSequence = roomMessages
+          .map((m) => m.sequence ?? 0)
+          .fold<int>(myLastReadSequenceByRoom[roomId] ?? 0,
+              (max, seq) => seq > max ? seq : max);
 
-      debugPrint("업서트 할 readReceiptsMap: $readReceiptsMap");
-
-      // 3. 중복 제거
-      final seen = <String>{};
-      final uniqueReadReceiptsMap = <Map<String, dynamic>>[];
-
-      for (var receipt in readReceiptsMap) {
-        final key = '${receipt['room_id']}_${receipt['message_id']}';
-        if (!seen.contains(key)) {
-          seen.add(key);
-          uniqueReadReceiptsMap.add(receipt);
-        } else {
-          debugPrint("중복된 데이터 발견: $receipt");
-        }
-      }
-
-      // 4. 읽음 상태 업데이트 (최대 3번 재시도)
-      bool updateSuccess = false;
-      int retryCount = 0;
-      const maxUpdateRetries = 3;
-
-      while (!updateSuccess && retryCount < maxUpdateRetries) {
+      final currentPosition = myLastReadSequenceByRoom[roomId] ?? 0;
+      if (maxSequence > currentPosition) {
         try {
-          await supabase.from('read_receipts').upsert(uniqueReadReceiptsMap);
-          debugPrint("✅ 읽음 상태 업데이트 성공!");
-          updateSuccess = true;
+          await chatApiClient.updateReadPosition(roomId, maxSequence);
+          myLastReadSequenceByRoom[roomId] = maxSequence;
+          final myUserId = supabase.auth.currentUser!.id;
+          final positions = readPositionsByRoom[roomId] ??= {};
+          positions[myUserId] = maxSequence;
+          _recomputeReadReceiptsForRoom(roomId);
+          debugPrint("✅ 읽음 위치 업데이트 성공! → $maxSequence");
         } catch (e) {
-          retryCount++;
-          debugPrint(
-              "❌ 읽음 상태 업데이트 실패! (시도 $retryCount/$maxUpdateRetries) 이유: $e");
-          if (retryCount < maxUpdateRetries) {
-            await Future.delayed(
-                Duration(milliseconds: 500 * retryCount)); // 지수 백오프
-          }
+          debugPrint("❌ 읽음 위치 업데이트 실패! 이유: $e");
         }
       }
 
-      if (!updateSuccess) {
-        debugPrint("⚠️ 읽음 상태 업데이트 최대 시도 횟수 초과. 계속 진행합니다.");
-      }
-
-      // 5. 로컬 상태 업데이트
+      // 3. 읽지 않은 메시지 카운트 초기화
       final previousUnreadCount = unreadMessages[roomId] ?? 0;
-
-      // 5.1 메시지 목록에서 읽음 상태 업데이트
-      if (messages.containsKey(roomId)) {
-        messages[roomId] = List.from(messages[roomId]!.map((message) {
-          if (unreadMessageIds.contains(message.id)) {
-            return message.copyWith(readReceipts: {
-              ...message.readReceipts,
-              supabase.auth.currentUser!.id
-            });
-          }
-          return message;
-        }));
-      }
-
-      // 5.2 읽지 않은 메시지 카운트 감소
       unreadMessageCount -= previousUnreadCount;
-
-      // 5.3 읽지 않은 메시지 상태 초기화
       unreadMessages[roomId] = 0;
       unreadMessageIdsByRoom[roomId] = [];
 
-      // 5.4 읽음 영수증 타임스탬프 업데이트
+      // 4. 읽음 영수증 타임스탬프 업데이트(레거시 위젯 호환용 필드, 값 자체는 더 안 쓰임)
       readReceipts[roomId] = DateTime.now();
       debugPrint("현재 읽음 시간${readReceipts[roomId]}");
 
-      // 6. UI 갱신을 위한 상태 이벤트 발생
+      // 5. UI 갱신을 위한 상태 이벤트 발생
       emit(ChatMessageLoaded());
       emit(UnreadMessagesUpdated(
           unreadMessageCount, unreadMessages)); // 필요한 인자 전달
@@ -2061,17 +2084,26 @@ class ChatCubit extends Cubit<ChatState> {
     }
   }
 
-  void sendReadReceipt(String roomId, String messageId) async {
+  /// 방을 열어두고 있는 동안 새 메시지가 도착하면(내가 보낸 메시지 포함) 즉시 내 읽음
+  /// 위치를 그 메시지의 sequence까지 올린다. sequence가 없으면(구형 페이로드 등) 안전하게
+  /// 건너뛴다 — STOMP 경로는 항상 sequence를 갖고 있어 정상 동작한다.
+  void sendReadReceipt(String roomId, String messageId, int? sequence) async {
     try {
-      logger.d("sendReadReceipt: $roomId $messageId");
-      await supabase.from('read_receipts').upsert({
-        'room_id': roomId,
-        'message_id': messageId,
-        'user_id': supabase.auth.currentUser!.id,
-      });
-      debugPrint("그전 readReceipts: ${readReceipts[roomId]}");
+      logger.d("sendReadReceipt: $roomId $messageId seq=$sequence");
+      if (sequence == null) return;
+
+      final current = myLastReadSequenceByRoom[roomId] ?? 0;
+      if (sequence <= current) return;
+
+      await chatApiClient.updateReadPosition(roomId, sequence);
+      myLastReadSequenceByRoom[roomId] = sequence;
+
+      final myUserId = supabase.auth.currentUser!.id;
+      final positions = readPositionsByRoom[roomId] ??= {};
+      positions[myUserId] = sequence;
+      _recomputeReadReceiptsForRoom(roomId);
+
       readReceipts[roomId] = DateTime.now();
-      debugPrint("그후 readReceipts: ${readReceipts[roomId]}");
     } catch (e) {
       logger.e("sendReadReceipt error: $e");
     }
