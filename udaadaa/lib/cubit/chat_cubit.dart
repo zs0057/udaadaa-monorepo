@@ -129,8 +129,6 @@ class ChatCubit extends Cubit<ChatState> {
   /// 그대로 유지한다 — Spring이 같은 Postgres 테이블에 쓰기 때문에 계속 동작한다.
   /// STOMP 전환은 Flutter 전환 B(쓰기 경로) 단계에서 별도로 진행한다.
   Future<void> _initialize() async {
-    final myUserId = supabase.auth.currentUser!.id;
-
     try {
       await Future.wait([
         fetchBlockedUsers(),
@@ -138,133 +136,7 @@ class ChatCubit extends Cubit<ChatState> {
         fetchPushOptions(),
       ]);
 
-      final roomsData = await chatApiClient.getRooms();
-
-      chatList = roomsData.map((roomMap) {
-        final membersData = List<Map<String, dynamic>>.from(
-            roomMap['members'] as List? ?? []);
-        final members = membersData
-            .map((m) => Profile(
-                  id: m['id'] as String,
-                  nickname: m['nickname'] as String,
-                ))
-            .toList();
-
-        final lastMessageMap = roomMap['lastMessage'] as Map<String, dynamic>?;
-        final lastMessage = lastMessageMap != null
-            ? Message.fromSpringMap(
-                map: lastMessageMap,
-                myUserId: myUserId,
-                reactions: [],
-                readReceipts: {},
-              )
-            : null;
-
-        Room room = Room.fromSpringMap(
-          roomMap,
-          members: members,
-          lastMessage: lastMessage,
-        );
-
-        room.members.sort(
-          ((a, b) => a.id == myUserId
-              ? -1
-              : b.id == myUserId
-                  ? 1
-                  : blockedUsers.contains(a.id)
-                      ? 1
-                      : blockedUsers.contains(b.id)
-                          ? -1
-                          : 0),
-        );
-        return room;
-      }).toList();
-
-      chatList.sort((a, b) {
-        if (a.lastMessage == null) return 1;
-        if (b.lastMessage == null) return -1;
-        return b.lastMessage!.createdAt!.compareTo(a.lastMessage!.createdAt!);
-      });
-
-      myLastReadSequenceByRoom = {
-        for (final r in roomsData)
-          r['id'] as String: (r['myLastReadSequence'] as num).toInt(),
-      };
-
-      unreadMessageIdsByRoom.clear();
-      unreadMessages.clear();
-      imageMessages.clear();
-      unreadMessageCount = 0;
-
-      // 방마다 최근 메시지 30개 + 최근 이미지 32장을 병렬로 불러온다.
-      // 최근 메시지 windowing은 lastMessage.sequence 기준(= 정확히 최신 N개).
-      await Future.wait(chatList.map((room) async {
-        final memberMap = room.memberMap;
-        final lastSeq = room.lastMessage?.sequence ?? 0;
-        final myLastRead = myLastReadSequenceByRoom[room.id] ?? 0;
-        final windowStart = lastSeq - 30 < 0 ? 0 : lastSeq - 30;
-
-        try {
-          final msgData = await chatApiClient.getMessages(
-            room.id,
-            after: windowStart,
-            limit: 30,
-          );
-          final loadedMessages = msgData
-              .map((m) => Message.fromSpringMap(
-                    map: m,
-                    myUserId: myUserId,
-                    profile: memberMap[m['senderId']],
-                    reactions: [],
-                    readReceipts: {},
-                  ))
-              .toList()
-            ..sort((a, b) => b.createdAt!.compareTo(a.createdAt!));
-
-          messages[room.id] = loadedMessages;
-
-          // 기존 enterRoom1이 기대하는 형태(상대가 보낸, 아직 안 읽은 메시지 id 목록)를
-          // sequence 비교로 재현한다.
-          final unreadIds = loadedMessages
-              .where((m) =>
-                  m.userId != myUserId && (m.sequence ?? 0) > myLastRead)
-              .map((m) => m.id!)
-              .toList();
-          unreadMessageIdsByRoom[room.id] = unreadIds;
-          unreadMessages[room.id] = unreadIds.length;
-          unreadMessageCount += unreadIds.length;
-
-          for (final message in loadedMessages) {
-            if (message.imagePath != null) {
-              await makeImageUrlMessage(message, emitLoaded: false);
-            }
-          }
-        } catch (e) {
-          logger.e("⛔ [${room.roomName}] 메시지 로드 실패: $e");
-          messages[room.id] = [];
-        }
-
-        try {
-          final imgData = await chatApiClient.getRecentImages(room.id, limit: 32);
-          imageMessages[room.id] = imgData
-              .map((m) => Message.fromSpringMap(
-                    map: m,
-                    myUserId: myUserId,
-                    profile: memberMap[m['senderId']],
-                    reactions: [],
-                    readReceipts: {},
-                  ))
-              .where((msg) => !(msg.isDeleted ?? false))
-              .map((message) => message.copyWith(
-                  imageUrl: message.imagePath != null
-                      ? '$baseUrl${message.imagePath}'
-                      : null))
-              .toList();
-        } catch (e) {
-          logger.e("⛔ [${room.roomName}] 이미지 갤러리 로드 실패: $e");
-          imageMessages[room.id] = [];
-        }
-      }));
+      await _loadRoomsAndMessages();
 
       debugPrint("🔒 Blocked User IDs: $blockedUsers");
       debugPrint("🧱 Blocked Message IDs: $blockedMessages");
@@ -343,6 +215,140 @@ class ChatCubit extends Cubit<ChatState> {
     } catch (e) {
       logger.e("초기화 실패: $e");
     }
+  }
+
+  /// GET /rooms + 방마다 GET /rooms/{roomId}/messages, GET /rooms/{roomId}/images를
+  /// 병렬로 불러와 chatList/messages/imageMessages/unread*를 채운다.
+  /// _initialize()와 joinRoom() 둘 다 이 메서드로 room 목록을 (다시) 채운다.
+  Future<void> _loadRoomsAndMessages() async {
+    final myUserId = supabase.auth.currentUser!.id;
+    final roomsData = await chatApiClient.getRooms();
+
+    chatList = roomsData.map((roomMap) {
+      final membersData =
+          List<Map<String, dynamic>>.from(roomMap['members'] as List? ?? []);
+      final members = membersData
+          .map((m) => Profile(
+                id: m['id'] as String,
+                nickname: m['nickname'] as String,
+              ))
+          .toList();
+
+      final lastMessageMap = roomMap['lastMessage'] as Map<String, dynamic>?;
+      final lastMessage = lastMessageMap != null
+          ? Message.fromSpringMap(
+              map: lastMessageMap,
+              myUserId: myUserId,
+              reactions: [],
+              readReceipts: {},
+            )
+          : null;
+
+      Room room = Room.fromSpringMap(
+        roomMap,
+        members: members,
+        lastMessage: lastMessage,
+      );
+
+      room.members.sort(
+        ((a, b) => a.id == myUserId
+            ? -1
+            : b.id == myUserId
+                ? 1
+                : blockedUsers.contains(a.id)
+                    ? 1
+                    : blockedUsers.contains(b.id)
+                        ? -1
+                        : 0),
+      );
+      return room;
+    }).toList();
+
+    chatList.sort((a, b) {
+      if (a.lastMessage == null) return 1;
+      if (b.lastMessage == null) return -1;
+      return b.lastMessage!.createdAt!.compareTo(a.lastMessage!.createdAt!);
+    });
+
+    myLastReadSequenceByRoom = {
+      for (final r in roomsData)
+        r['id'] as String: (r['myLastReadSequence'] as num).toInt(),
+    };
+
+    unreadMessageIdsByRoom.clear();
+    unreadMessages.clear();
+    imageMessages.clear();
+    unreadMessageCount = 0;
+
+    // 방마다 최근 메시지 30개 + 최근 이미지 32장을 병렬로 불러온다.
+    // 최근 메시지 windowing은 lastMessage.sequence 기준(= 정확히 최신 N개).
+    await Future.wait(chatList.map((room) async {
+      final memberMap = room.memberMap;
+      final lastSeq = room.lastMessage?.sequence ?? 0;
+      final myLastRead = myLastReadSequenceByRoom[room.id] ?? 0;
+      final windowStart = lastSeq - 30 < 0 ? 0 : lastSeq - 30;
+
+      try {
+        final msgData = await chatApiClient.getMessages(
+          room.id,
+          after: windowStart,
+          limit: 30,
+        );
+        final loadedMessages = msgData
+            .map((m) => Message.fromSpringMap(
+                  map: m,
+                  myUserId: myUserId,
+                  profile: memberMap[m['senderId']],
+                  reactions: [],
+                  readReceipts: {},
+                ))
+            .toList()
+          ..sort((a, b) => b.createdAt!.compareTo(a.createdAt!));
+
+        messages[room.id] = loadedMessages;
+
+        // 기존 enterRoom1이 기대하는 형태(상대가 보낸, 아직 안 읽은 메시지 id 목록)를
+        // sequence 비교로 재현한다.
+        final unreadIds = loadedMessages
+            .where(
+                (m) => m.userId != myUserId && (m.sequence ?? 0) > myLastRead)
+            .map((m) => m.id!)
+            .toList();
+        unreadMessageIdsByRoom[room.id] = unreadIds;
+        unreadMessages[room.id] = unreadIds.length;
+        unreadMessageCount += unreadIds.length;
+
+        for (final message in loadedMessages) {
+          if (message.imagePath != null) {
+            await makeImageUrlMessage(message, emitLoaded: false);
+          }
+        }
+      } catch (e) {
+        logger.e("⛔ [${room.roomName}] 메시지 로드 실패: $e");
+        messages[room.id] = [];
+      }
+
+      try {
+        final imgData = await chatApiClient.getRecentImages(room.id, limit: 32);
+        imageMessages[room.id] = imgData
+            .map((m) => Message.fromSpringMap(
+                  map: m,
+                  myUserId: myUserId,
+                  profile: memberMap[m['senderId']],
+                  reactions: [],
+                  readReceipts: {},
+                ))
+            .where((msg) => !(msg.isDeleted ?? false))
+            .map((message) => message.copyWith(
+                imageUrl: message.imagePath != null
+                    ? '$baseUrl${message.imagePath}'
+                    : null))
+            .toList();
+      } catch (e) {
+        logger.e("⛔ [${room.roomName}] 이미지 갤러리 로드 실패: $e");
+        imageMessages[room.id] = [];
+      }
+    }));
   }
 
   // Future<void> _initialize() async {
@@ -1539,40 +1545,32 @@ class ChatCubit extends Cubit<ChatState> {
 
   Future<void> joinRoom(String roomId) async {
     try {
-      logger.d(supabase.auth.currentUser!.id);
-      await supabase.from('room_participants').insert({
-        'room_id': roomId,
-        'user_id': supabase.auth.currentUser!.id,
-      });
-      await loadChatList(emitLoaded: false);
-      await Future.wait([
-        fetchLatestMessages(emitLoaded: false),
-        fetchLatestReceipt(),
-      ]);
-      await Future.wait([
-        loadInitialMessages1(emitLoaded: false),
-        loadImageMessages(),
-      ]);
+      await chatApiClient.joinRoom(roomId);
+    } catch (e) {
+      emit(JoinRoomFailed("이미 해당 방에 참여중입니다.")); // ❌ 실패 시 상태
+      logger.e("joinRoom error: $e");
+      return;
+    }
+
+    try {
+      // 새로 참가한 방을 포함해 rooms/messages/images를 통째로 다시 불러온다
+      // (기존처럼 방별로 따로따로 REST를 부르는 대신 _initialize()와 같은 경로를 재사용).
+      await _loadRoomsAndMessages();
+      chatStompClient.subscribeToRoom(roomId);
+
       final roomInfo = chatList.firstWhere((room) => room.id == roomId);
       await fetchRoomRanking(roomInfo, emitLoaded: false);
       if (roomInfo.startDay != null && roomInfo.endDay != null) {
         try {
-          debugPrint("5");
           await challengeCubit.enterChallengeByDay(
               roomInfo.startDay!, roomInfo.endDay!);
         } catch (e) {
-          logger.e("joinRoom error: $e");
-          supabase
-              .from('room_participants')
-              .delete()
-              .eq('room_id', roomId)
-              .eq('user_id', supabase.auth.currentUser!.id);
+          logger.e("joinRoom 챌린지 등록 실패, 참가를 롤백합니다: $e");
+          await chatApiClient.leaveRoom(roomId);
         }
       }
     } catch (e) {
-      emit(JoinRoomFailed("이미 해당 방에 참여중입니다.")); // ❌ 실패 시 상태
-      logger.e("participateRoom error: $e");
-      return;
+      logger.e("joinRoom 후처리 실패: $e");
     }
     emit(JoinRoomSuccess()); // ✅ 성공 시 상태
     emit(ChatMessageLoaded());
@@ -1900,11 +1898,9 @@ class ChatCubit extends Cubit<ChatState> {
     }
   }
 
-  Future<void> deleteMessage(String messageId) async {
+  Future<void> deleteMessage(String roomId, String messageId) async {
     try {
-      await supabase.from('messages').update({
-        'is_deleted': true,
-      }).eq('id', messageId);
+      await chatApiClient.deleteMessage(roomId, messageId);
     } catch (e) {
       logger.e("deleteMessage error: $e");
     }
@@ -1951,9 +1947,9 @@ class ChatCubit extends Cubit<ChatState> {
         logger.e('Failed to compress image');
         return null;
       }
-      final userId = supabase.auth.currentUser!.id;
-      final imagePath =
-          '$roomId/${DateTime.now().microsecondsSinceEpoch}_$userId.jpg';
+      // CHT-06: 실제 업로드 경로는 항상 서버(Spring)가 발급한다 —
+      // 참가자 검증(requireParticipant)을 통과해야만 경로를 받을 수 있다.
+      final imagePath = await chatApiClient.approveImageUpload(roomId);
 
       for (int retry = 0; retry < 3; retry++) {
         try {
@@ -1993,7 +1989,6 @@ class ChatCubit extends Cubit<ChatState> {
       return [];
     }
 
-    final userId = supabase.auth.currentUser!.id;
     List<String> uploadedPaths = [];
 
     for (final file in files) {
@@ -2004,8 +1999,8 @@ class ChatCubit extends Cubit<ChatState> {
           continue;
         }
 
-        final imagePath =
-            '$roomId/${DateTime.now().microsecondsSinceEpoch}_$userId.jpg';
+        // CHT-06: 이미지마다 서버가 발급한 경로를 새로 받는다.
+        final imagePath = await chatApiClient.approveImageUpload(roomId);
         bool uploadSuccess = false;
 
         for (int retry = 0; retry < 3; retry++) {
@@ -2084,19 +2079,7 @@ class ChatCubit extends Cubit<ChatState> {
 
   void sendReaction(String roomId, String messageId, String emoji) async {
     try {
-      Reaction reaction = Reaction(
-        roomId: roomId,
-        messageId: messageId,
-        userId: supabase.auth.currentUser!.id,
-        content: emoji,
-      );
-      await supabase.from('chat_reactions').upsert(reaction.toMap());
-      /*await supabase.from('chat_reactions').upsert({
-        'room_id': roomId,
-        'message_id': messageId,
-        'user_id': supabase.auth.currentUser!.id,
-        'emoji': emoji,
-      });*/
+      await chatApiClient.addReaction(roomId, messageId, emoji);
     } catch (e) {
       logger.e("sendReaction error: $e");
     }
@@ -2120,11 +2103,7 @@ class ChatCubit extends Cubit<ChatState> {
 
   void blockMessage(String messageId, String roomId) async {
     try {
-      await supabase.from('blocked_messages').upsert({
-        'message_id': messageId,
-        'user_id': supabase.auth.currentUser!.id,
-        'room_id': roomId,
-      });
+      await chatApiClient.hideMessage(roomId, messageId);
       blockedMessages.add(messageId);
       messages[roomId] = List.from(messages[roomId]!.where((message) {
         return message.id != messageId;
