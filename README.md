@@ -40,8 +40,10 @@ Udaadaa는 채팅과 챌린지를 통해 사용자가 건강 목표를 꾸준히
     - Supabase JWT 사용자와 서비스 회원을 연결하고 프로필 조회·수정을 이전합니다.
     - 현재 상태: Spring API 검증 완료, 실제 Supabase 비교 완료, Flutter의 프로필 조회·닉네임 수정이 Spring API로 전환됨(코드 완료). 실기기 회귀 테스트·이메일/Apple 로그인 경로 확인은 전체 Phase 종료 후 일괄 진행 예정
     - 상세 문서: [Phase 1 Member](docs/migration/phases/phase-01-member.md), [2026-07-29 진행 기록](docs/migration/progress/2026-07-29-phase-01-progress.md), [2026-08-06 Flutter 전환 기록](docs/migration/progress/2026-08-06-phase-01-flutter-transition.md)
-  - [ ] **Phase 2 — Moderation** · 예정
+  - [ ] **Phase 2 — Moderation** · 구현 중
     - 사용자 차단과 공통 상호작용 허용 규칙을 Spring으로 이전합니다.
+    - 현재 상태: Spring Moderation 모듈(차단 생성·해제·조회·양방향 상호작용 확인 API)과 Flutter 전환 코드 작성 완료. 로컬 `./gradlew test` 확인 필요(샌드박스에 Java 21 없어 미실행)
+    - 상세 문서: [Phase 2 Moderation](docs/migration/phases/phase-02-moderation.md), [2026-08-06 구현 기록](docs/migration/progress/2026-08-06-phase-02-moderation-implementation.md)
   - [ ] **Phase 3 — Chat + Notification** · 예정
     - 채팅 저장·STOMP 전달·누락 복구·읽음·Push를 이전합니다.
   - [ ] **Phase 4 — Challenge** · 예정

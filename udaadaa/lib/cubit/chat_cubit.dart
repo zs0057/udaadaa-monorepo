@@ -19,6 +19,7 @@ import 'package:udaadaa/models/feed.dart';
 import 'package:udaadaa/models/message.dart';
 import 'package:udaadaa/models/profile.dart';
 import 'package:udaadaa/models/room.dart';
+import 'package:udaadaa/data/moderation_api_client.dart';
 import 'package:udaadaa/utils/analytics/analytics.dart';
 import 'package:udaadaa/utils/constant.dart';
 
@@ -739,11 +740,7 @@ class ChatCubit extends Cubit<ChatState> {
 
   Future<void> fetchBlockedUsers() async {
     try {
-      final response = await supabase
-          .from('blocked_users')
-          .select('block_user_id')
-          .eq('user_id', supabase.auth.currentUser!.id);
-      blockedUsers = response.map((e) => e['block_user_id'] as String).toList();
+      blockedUsers = await moderationApiClient.getBlockedMemberIds();
       logger.d("fetchBlockedUsers: $blockedUsers");
     } catch (e) {
       logger.e('Error fetching blocked users: $e');
@@ -2026,10 +2023,7 @@ class ChatCubit extends Cubit<ChatState> {
 
   void blockUser(String userId) async {
     try {
-      await supabase.from('blocked_users').upsert({
-        'block_user_id': userId,
-        'user_id': supabase.auth.currentUser!.id,
-      });
+      await moderationApiClient.blockMember(userId);
       blockedUsers.add(userId);
       messages.forEach((roomId, messageList) {
         messages[roomId] = List.from(messageList.where((message) {
