@@ -63,6 +63,28 @@ class ChatApiClient {
     return List<Map<String, dynamic>>.from(response.data as List);
   }
 
+  /// 메시지를 전송한다. clientMessageId로 재전송 멱등 처리된다(같은 id로 다시 보내도
+  /// 새 메시지가 만들어지지 않고 기존 메시지가 그대로 반환됨 — CHT-03).
+  Future<Map<String, dynamic>> sendMessage(
+    String roomId, {
+    required String clientMessageId,
+    required String type,
+    String? content,
+    String? imagePath,
+  }) async {
+    final response = await _dio.post(
+      '/api/v1/chat/rooms/$roomId/messages',
+      data: {
+        'clientMessageId': clientMessageId,
+        'type': type,
+        if (content != null) 'content': content,
+        if (imagePath != null) 'imagePath': imagePath,
+      },
+      options: await _authOptions(),
+    );
+    return response.data as Map<String, dynamic>;
+  }
+
   /// 방 참가자 전원의 읽음 위치(lastReadSequence)를 반환한다("안읽음 N명" 계산용).
   Future<List<Map<String, dynamic>>> getReadPositions(String roomId) async {
     final response = await _dio.get(
