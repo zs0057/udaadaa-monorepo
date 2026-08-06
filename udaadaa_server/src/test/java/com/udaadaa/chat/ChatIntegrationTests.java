@@ -50,11 +50,19 @@ class ChatIntegrationTests extends AbstractIntegrationTest {
                     end if;
                 end $$
                 """);
+        // Member/Moderation 테스트와 같은 컨테이너를 공유하므로(스프링 컨텍스트 캐싱),
+        // 다른 모듈의 테스트가 기대하는 전체 컬럼을 그대로 맞춰야 한다.
+        // "create table if not exists"는 먼저 실행된 정의가 그대로 남기 때문에,
+        // 여기서 컬럼을 빼먹으면 알파벳 순서상 나중에 도는 Member/Moderation 테스트가 깨진다.
         jdbcTemplate.execute("""
                 create table if not exists public.profiles (
                     id uuid primary key,
                     created_at timestamp with time zone not null default now(),
-                    nickname text not null unique
+                    nickname text not null unique,
+                    push_option boolean not null default true,
+                    fcm_token text,
+                    height numeric,
+                    weight numeric
                 )
                 """);
         jdbcTemplate.execute("""
