@@ -79,7 +79,7 @@ class ChallengeIntegrationTests extends AbstractIntegrationTest {
                 """);
         jdbcTemplate.execute("""
                 create table if not exists public.feed (
-                    id uuid primary key,
+                    id uuid primary key default gen_random_uuid(),
                     user_id uuid not null,
                     created_at timestamp with time zone not null default now(),
                     review text not null default '',
@@ -92,7 +92,7 @@ class ChallengeIntegrationTests extends AbstractIntegrationTest {
                 """);
         jdbcTemplate.execute("""
                 create table if not exists public.weight (
-                    id uuid primary key,
+                    id uuid primary key default gen_random_uuid(),
                     created_at timestamp with time zone not null default now(),
                     weight double precision not null,
                     date date not null,

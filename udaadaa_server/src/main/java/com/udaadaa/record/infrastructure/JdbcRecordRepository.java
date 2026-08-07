@@ -39,28 +39,30 @@ class JdbcRecordRepository implements RecordRepository {
 
     @Override
     public UUID insertFeed(MemberId memberId, FeedType type, String review, String imagePath, Long calorie) {
-        return jdbcTemplate.queryForObject(
+        // id는 컬럼 기본값에 기대지 않고 SQL에서 직접 생성한다(messages.insertIfAbsent,
+        // challenge.insertGeneral과 같은 방식) — 테이블 기본값 설정 여부에 기대지 않기 위함.
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update(
                 """
-                insert into public.feed (user_id, review, type, image_path, calorie, is_challenge)
-                values (?, ?, cast(? as "FeedType"), ?, ?, true)
-                returning id
+                insert into public.feed (id, user_id, review, type, image_path, calorie, is_challenge)
+                values (?, ?, ?, cast(? as "FeedType"), ?, ?, true)
                 """,
-                UUID.class,
-                memberId.value(), review, type.dbValue(), imagePath, calorie
+                id, memberId.value(), review, type.dbValue(), imagePath, calorie
         );
+        return id;
     }
 
     @Override
     public UUID insertWeight(MemberId memberId, double weightValue, LocalDate date, String imagePath) {
-        return jdbcTemplate.queryForObject(
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update(
                 """
-                insert into public.weight (user_id, weight, date, image_path)
-                values (?, ?, ?, ?)
-                returning id
+                insert into public.weight (id, user_id, weight, date, image_path)
+                values (?, ?, ?, ?, ?)
                 """,
-                UUID.class,
-                memberId.value(), weightValue, date, imagePath == null ? "" : imagePath
+                id, memberId.value(), weightValue, date, imagePath == null ? "" : imagePath
         );
+        return id;
     }
 
     @Override
