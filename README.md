@@ -34,6 +34,9 @@ Udaadaa는 채팅과 챌린지를 통해 사용자가 건강 목표를 꾸준히
 - [x] Phase별 Before → After 변경 매핑 작성 (진행하면서 갱신)
   - 기존 Flutter/Supabase 코드가 어떤 Spring API·Flutter 코드로 바뀌었는지 기능 단위로 정리했습니다.
   - 상세 문서: [Migration Changelog](docs/migration/06-migration-changelog.md)
+- [x] 구현 주의사항·추가 검토 필요 항목 추적 (진행하면서 갱신)
+  - 완전히 해결되지 않았거나 후속 Phase에서 다시 봐야 하는 항목을 위험도와 함께 정리했습니다.
+  - 상세 문서: [Implementation Watchlist](docs/migration/07-implementation-watchlist.md)
 - [ ] 기능 단위 Spring 이전 및 검증
   - [x] **Phase 0 — Spring 공통 기반** · 완료
     - Spring 실행·인증·DB·모듈·오류·관찰·테스트 기반을 준비합니다.
@@ -51,8 +54,9 @@ Udaadaa는 채팅과 챌린지를 통해 사용자가 건강 목표를 꾸준히
     - 채팅 저장·STOMP 전달·누락 복구·읽음·Push를 이전합니다.
     - 현재 상태: 서버 3-1~3-4(조회·저장+STOMP·참가/반응/삭제/숨김/이미지업로드·Notification) 코드 완료. Flutter 전환 A~D(읽기, 쓰기+STOMP, 참가/반응/삭제/숨김/이미지업로드, 읽음 위치+안읽음 배지) 완료 — A~C는 병합 완료, D는 로컬 빌드 확인 대기. D 작업 중 읽음 위치 실시간 브로드캐스트(`ReadPositionUpdated` + STOMP)를 계획에 없던 추가 범위로 구현했다. 기존 `message-push` DB 트리거는 Spring Push 검증 전까지 병행 유지 중. 조사 중 발견한 `service_role` 키 유출은 코드 수정 완료·로테이션 보류(Phase 0 Verification §7 참고)
     - 상세 문서: [Phase 3 Chat + Notification](docs/migration/phases/phase-03-chat-notification.md), [2026-08-06 3-1 구현 기록](docs/migration/progress/2026-08-06-phase-03-3-1-implementation.md)
-  - [ ] **Phase 4 — Challenge** · 예정
-    - 챌린지 참여·기간·미션 진행과 성공 판정을 이전합니다.
+  - [ ] **Phase 4 — Challenge** · 구현 중
+    - 챌린지 참여·기간·미션 진행과 성공 판정을 이전합니다. 방 참가+챌린지 참여를 하나의 서버 트랜잭션으로 묶었습니다.
+    - 상세 문서: [Phase 4 Challenge](docs/migration/phases/phase-04-challenge.md)
   - [ ] **Phase 5 — Record + 미션 통합** · 예정
     - 식단·운동·체중 기록과 `mission_complete` 흐름을 이전합니다.
   - [ ] **Phase 6 — Social** · 예정

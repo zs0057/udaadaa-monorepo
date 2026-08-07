@@ -36,6 +36,7 @@ class ChatIntegrationTests extends AbstractIntegrationTest {
     private static final UUID USER_B = UUID.fromString("a6c4cda5-a044-4f44-a75c-434d2592551d");
     private static final UUID ROOM_1 = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID ROOM_2 = UUID.fromString("22222222-2222-2222-2222-222222222222");
+    private static final UUID CHALLENGE_ROOM = UUID.fromString("33333333-3333-3333-3333-333333333333");
 
     @Autowired
     private MockMvc mockMvc;
@@ -173,10 +174,27 @@ class ChatIntegrationTests extends AbstractIntegrationTest {
                     primary key (user_id, block_user_id)
                 )
                 """);
+        // Phase 4: joinRoom이 챌린지 방이면 같이 참여를 만든다 — Challenge 테스트와 같은 정의를 공유한다.
+        jdbcTemplate.execute("""
+                create table if not exists public.challenge (
+                    id uuid primary key,
+                    created_at timestamp with time zone not null default now(),
+                    start_day date not null,
+                    end_day date not null,
+                    user_id uuid not null,
+                    is_success boolean not null default false,
+                    room_id uuid
+                )
+                """);
+        jdbcTemplate.execute("""
+                create unique index if not exists challenge_user_id_room_id_key
+                    on public.challenge (user_id, room_id) where room_id is not null
+                """);
     }
 
     @BeforeEach
     void clearTables() {
+        jdbcTemplate.update("delete from public.challenge");
         jdbcTemplate.update("delete from public.blocked_users");
         jdbcTemplate.update("delete from public.chat_reactions");
         jdbcTemplate.update("delete from public.blocked_messages");
@@ -191,6 +209,10 @@ class ChatIntegrationTests extends AbstractIntegrationTest {
         jdbcTemplate.update(
                 "insert into public.rooms (id, room_name) values (?, ?), (?, ?)",
                 ROOM_1, "방 1", ROOM_2, "방 2"
+        );
+        jdbcTemplate.update(
+                "insert into public.rooms (id, room_name, start_day, end_day) values (?, ?, ?, ?)",
+                CHALLENGE_ROOM, "챌린지 방", java.time.LocalDate.now().plusDays(0), java.time.LocalDate.now().plusDays(13)
         );
         // USER_A는 두 방 모두 참가, USER_B는 ROOM_2만 참가
         jdbcTemplate.update(
@@ -421,6 +443,52 @@ class ChatIntegrationTests extends AbstractIntegrationTest {
                         .header("Authorization", bearerToken(USER_B)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ROOM_NOT_FOUND"));
+    }
+
+    @Test
+    void joiningChallengeRoomAlsoCreatesChallengeParticipation() throws Exception {
+        // Phase 4 CHA-02: 챌린지 방 참가는 방 참가와 챌린지 참여를 한 트랜잭션으로 만든다.
+        mockMvc.perform(post("/api/v1/chat/rooms/" + CHALLENGE_ROOM + "/participants")
+                        .header("Authorization", bearerToken(USER_B)))
+                .andExpect(status().isNoContent());
+
+        Integer count = jdbcTemplate.queryForObject(
+                "select count(*) from public.challenge where user_id = ? and room_id = ?",
+                Integer.class, USER_B, CHALLENGE_ROOM
+        );
+        org.assertj.core.api.Assertions.assertThat(count).isEqualTo(1);
+    }
+
+    @Test
+    void rejoiningChallengeRoomStaysIdempotentForBothRoomAndChallenge() throws Exception {
+        mockMvc.perform(post("/api/v1/chat/rooms/" + CHALLENGE_ROOM + "/participants")
+                        .header("Authorization", bearerToken(USER_B)))
+                .andExpect(status().isNoContent());
+
+        // 재시도(이미 참가 중) — 방 참가는 409지만 챌린지 참여는 계속 멱등하게 보강 시도된다.
+        mockMvc.perform(post("/api/v1/chat/rooms/" + CHALLENGE_ROOM + "/participants")
+                        .header("Authorization", bearerToken(USER_B)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ALREADY_JOINED"));
+
+        Integer count = jdbcTemplate.queryForObject(
+                "select count(*) from public.challenge where user_id = ? and room_id = ?",
+                Integer.class, USER_B, CHALLENGE_ROOM
+        );
+        org.assertj.core.api.Assertions.assertThat(count).isEqualTo(1);
+    }
+
+    @Test
+    void joiningPlainRoomDoesNotCreateChallengeParticipation() throws Exception {
+        mockMvc.perform(post("/api/v1/chat/rooms/" + ROOM_1 + "/participants")
+                        .header("Authorization", bearerToken(USER_B)))
+                .andExpect(status().isNoContent());
+
+        Integer count = jdbcTemplate.queryForObject(
+                "select count(*) from public.challenge where user_id = ?",
+                Integer.class, USER_B
+        );
+        org.assertj.core.api.Assertions.assertThat(count).isZero();
     }
 
     @Test
