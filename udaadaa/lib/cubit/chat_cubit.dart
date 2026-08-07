@@ -1699,16 +1699,14 @@ class ChatCubit extends Cubit<ChatState> {
       final roomInfo = chatList.firstWhere((room) => room.id == roomId);
       await fetchRoomRanking(roomInfo, emitLoaded: false);
       if (roomInfo.startDay != null && roomInfo.endDay != null) {
-        try {
-          await challengeCubit.enterChallengeByDay(
-              roomInfo.startDay!, roomInfo.endDay!);
-        } catch (e) {
-          logger.e("joinRoom 챌린지 등록 실패, 참가를 롤백합니다: $e");
-          await chatApiClient.leaveRoom(roomId);
-        }
+        // 방 참가와 챌린지 참여는 이제 서버(POST .../participants)가 한 트랜잭션으로
+        // 함께 처리한다(Phase 4 CHA-02) — 여기서 직접 참여를 만들 필요가 없고,
+        // 실패해도 롤백할 필요가 없다(애초에 둘 다 성공했거나 둘 다 실패했을 것).
+        // ChallengeCubit의 로컬 캐시만 새로고침한다.
+        await challengeCubit.refresh();
       }
     } catch (e) {
-      // 랭킹·챌린지 연동은 부가 기능이라 실패해도 "방 참가" 자체는 성공으로 본다.
+      // 랭킹·챌린지 상태 새로고침은 부가 기능이라 실패해도 "방 참가" 자체는 성공으로 본다.
       logger.e("joinRoom 부가 처리 실패: $e");
     }
 

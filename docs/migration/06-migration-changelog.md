@@ -93,7 +93,24 @@
 
 ---
 
-## Phase 4 이후
+## Phase 4: Challenge
+
+> 상세: [phase-04-challenge.md](phases/phase-04-challenge.md)
+
+| 기능 | 이전 | 이후 |
+|---|---|---|
+| 방 참가 + 챌린지 참여 | `ChatCubit.joinRoom()`이 방 참가 성공 후 `enterChallengeByDay()`를 별도 호출, 실패하면 `leaveRoom()`으로 앱이 수동 롤백(진짜 트랜잭션 아님) | `ChatApplicationService.joinRoom()`이 챌린지 방이면 `ChallengeReader.enterForRoom()`을 같은 `@Transactional` 안에서 호출 — 방 참가와 챌린지 참여가 실제 DB 트랜잭션으로 묶임(CHA-02) |
+| 참여 중복 방지 | 없음 — `enterChallengeByDay`에 검증이 아예 없고 `challenge`에 유니크 제약도 없었음 | `challenge`에 `room_id` 컬럼 Expand + `(user_id, room_id)` 부분 유니크 인덱스, insert는 `on conflict do nothing`으로 멱등(CHA-03) |
+| 챌린지 상태 조회 | `ChallengeCubit`이 `isEntered`·`getCurrentChallenges`·`getConsecutiveChallengeDays`·`getTodayMission`·`getCurrentChallengeCompletedDays` 5개 메서드로 Supabase를 각각 조회·계산 | `GET /api/v1/challenges/me` 한 번 — 참여 여부·기간·진행일수·연속성공일수·오늘 완료 여부·최종 성공 여부·날짜별 미션 건수를 서버가 계산해 반환 |
+| 종료된 챌린지 목록 | `fetchChallenge()` — Supabase 직접 조회 | `GET /api/v1/challenges/me/history` |
+| 일반(장기) 챌린지 참여 | `enterChallenge()` — Supabase insert, `+6일`(7일) 하드코딩 | `POST /api/v1/challenges` — 14일 고정. 온보딩 경로가 7일로 만들던 기존 버그(13일 연속 성공 기준과 불일치)를 여기서 같이 고침 |
+| 미션 진행·연속 성공 계산 | 클라이언트가 매번 `feed`/`weight`를 KST 자정 보정 트릭(`DateTime(y,m,d,-9)`)으로 날짜별 순회 조회 | `challenge` 모듈이 서버에서 계산. `feed`/`weight`는 Record(Phase 5) 소유라 임시로 읽기 전용 직접 조회(CHA-04, Phase 5에서 이벤트 구독으로 교체 예정) |
+| 캘린더 날짜 선택 시 미션 건수 | `selectDay()`마다 Supabase에 새로 쿼리(`getSelectedDayMission`) | `GET /me` 응답의 `dailyMissionCounts`(챌린지 시작일~오늘 전체)를 캐시해두고 로컬에서 조회 — 탭할 때마다 네트워크 호출 없음 |
+| 날짜 경계 계산 | `DateTime(y, m, d, -9)` 트릭 | 서버에서 `ZoneId.of("Asia/Seoul")`로 명시적 계산(CHA-06) |
+
+**아직 안 바뀐 것**: `mission_complete` RPC는 여전히 `challenge`를 갱신하지 않는다(Phase 5 소관). 미션 인증 직후 진행 상태가 즉시 반영되지 않고, Flutter가 인증 후 `updateMission()`(=서버에 다시 물어보는 `refresh()`)을 호출해야 반영된다 — 이전에도 클라이언트가 재계산해야 했던 것과 근본적으로 같은 갭이다.
+
+## Phase 5 이후
 
 아직 계획 단계이거나 시작 전이라 매핑할 내용이 없다. Phase가 진행되면 이 문서에 같은 형식으로 이어서 추가한다.
 
@@ -107,7 +124,7 @@
 | 1. Member | 완료 (Flutter 전환까지) | `com.udaadaa.member`, `lib/cubit/auth_cubit.dart` |
 | 2. Moderation | 완료 (Flutter 전환까지, 실기기 테스트만 전체 종료 후 일괄) | `com.udaadaa.moderation`, `lib/cubit/chat_cubit.dart`(차단 부분) |
 | 3. Chat + Notification | Flutter 전환 A~D 완료, 스모크 테스트로 회귀 4건 수정 완료. Notification은 서버 코드만 완료(기존 Trigger 병행 중) | `com.udaadaa.chat`, `com.udaadaa.notification`, `lib/cubit/chat_cubit.dart` |
-| 4. Challenge | 조사 완료, 계획 문서 작성 중 | — |
+| 4. Challenge | 코드 완료 (로컬 `./gradlew test`·`flutter analyze` 확인 대기, 실기기 테스트는 전체 종료 후 일괄) | `com.udaadaa.challenge`, `lib/cubit/challenge_cubit.dart`, `lib/data/challenge_api_client.dart` |
 | 5~8 | 예정 | — |
 
 실기기 회귀 테스트(Task #8)는 전체 Phase 종료 후 일괄 진행하기로 결정된 상태라 이 문서의 "완료"는 코드·시뮬레이터 검증 기준이다.

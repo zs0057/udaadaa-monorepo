@@ -1,6 +1,7 @@
 package com.udaadaa.chat.infrastructure;
 
 import com.udaadaa.chat.RoomId;
+import com.udaadaa.chat.domain.ChallengeRoomPeriod;
 import com.udaadaa.chat.domain.ChatRepository;
 import com.udaadaa.chat.domain.MessageSummary;
 import com.udaadaa.chat.domain.ReadPosition;
@@ -66,6 +67,12 @@ class JpaChatRepository implements ChatRepository {
     @Override
     public boolean roomExists(RoomId roomId) {
         return roomRepository.existsById(roomId.value());
+    }
+
+    @Override
+    public Optional<ChallengeRoomPeriod> findChallengeRoomPeriod(RoomId roomId) {
+        return roomRepository.findById(roomId.value())
+                .map(room -> new ChallengeRoomPeriod(room.startDay(), room.endDay()));
     }
 
     @Override

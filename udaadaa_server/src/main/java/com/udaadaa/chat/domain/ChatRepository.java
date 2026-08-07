@@ -27,6 +27,12 @@ public interface ChatRepository {
     boolean roomExists(RoomId roomId);
 
     /**
+     * 방의 챌린지 기간을 반환한다(Phase 4 CHA-01·CHA-02 — joinRoom이 챌린지 참여를 같은
+     * 트랜잭션에서 함께 처리할지 판단하는 데 쓴다). 방이 없으면 empty.
+     */
+    Optional<ChallengeRoomPeriod> findChallengeRoomPeriod(RoomId roomId);
+
+    /**
      * afterSequence보다 큰 순번의 메시지를 오름차순으로 최대 limit개 반환한다.
      */
     List<MessageSummary> findMessagesAfter(RoomId roomId, long afterSequence, int limit);

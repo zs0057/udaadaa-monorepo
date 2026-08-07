@@ -1,8 +1,10 @@
 package com.udaadaa.chat.application;
 
+import com.udaadaa.challenge.ChallengeReader;
 import com.udaadaa.chat.ChatMessageCreated;
 import com.udaadaa.chat.ReadPositionUpdated;
 import com.udaadaa.chat.RoomId;
+import com.udaadaa.chat.domain.ChallengeRoomPeriod;
 import com.udaadaa.chat.domain.ChatRepository;
 import com.udaadaa.chat.domain.MessageSummary;
 import com.udaadaa.chat.domain.ReadPosition;
@@ -32,17 +34,20 @@ public class ChatApplicationService {
     private final ChatRepository chatRepository;
     private final ModerationReader moderationReader;
     private final MemberReader memberReader;
+    private final ChallengeReader challengeReader;
     private final ApplicationEventPublisher eventPublisher;
 
     ChatApplicationService(
             ChatRepository chatRepository,
             ModerationReader moderationReader,
             MemberReader memberReader,
+            ChallengeReader challengeReader,
             ApplicationEventPublisher eventPublisher
     ) {
         this.chatRepository = chatRepository;
         this.moderationReader = moderationReader;
         this.memberReader = memberReader;
+        this.challengeReader = challengeReader;
         this.eventPublisher = eventPublisher;
     }
 
@@ -142,13 +147,26 @@ public class ChatApplicationService {
         return chatRepository.isParticipant(roomId, memberId);
     }
 
+    /**
+     * 챌린지 방이면 방 참가와 챌린지 참여를 이 메서드 하나의 트랜잭션으로 묶는다(Phase 4 CHA-02).
+     * 이미 참가 중이었던 재시도 호출에서도 챌린지 참여 보강은 계속 시도한다 — 예전 Flutter가
+     * 매 joinRoom 호출마다 enterChallengeByDay를 다시 부르던 것과 동일한 보강 효과를,
+     * 이제는 원자적 insert-or-noop(CHA-03)으로 안전하게 재현한다. 그래서 "이미 참가 중"
+     * 예외는 챌린지 보강 이후에 던진다.
+     */
     @Transactional
     public void joinRoom(MemberId memberId, RoomId roomId) {
         if (!chatRepository.roomExists(roomId)) {
             throw new RoomNotFoundException();
         }
-        boolean joined = chatRepository.addParticipantIfAbsent(roomId, memberId);
-        if (!joined) {
+        boolean newlyJoined = chatRepository.addParticipantIfAbsent(roomId, memberId);
+
+        chatRepository.findChallengeRoomPeriod(roomId)
+                .filter(ChallengeRoomPeriod::isChallengeRoom)
+                .ifPresent(period -> challengeReader.enterForRoom(
+                        memberId, roomId.value(), period.startDay(), period.endDay()));
+
+        if (!newlyJoined) {
             throw new AlreadyParticipantException();
         }
     }
