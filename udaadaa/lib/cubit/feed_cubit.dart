@@ -6,10 +6,10 @@ import 'package:flutter/foundation.dart';
 import 'package:meta/meta.dart';
 import 'package:udaadaa/cubit/auth_cubit.dart';
 import 'package:udaadaa/cubit/challenge_cubit.dart';
+import 'package:udaadaa/data/record_api_client.dart';
 import 'package:udaadaa/models/feed.dart';
 import 'package:udaadaa/models/profile.dart';
 import 'package:udaadaa/models/reaction.dart';
-import 'package:udaadaa/models/report.dart';
 import 'package:udaadaa/utils/constant.dart';
 
 import '../utils/analytics/analytics.dart';
@@ -756,45 +756,14 @@ class FeedCubit extends Cubit<FeedState> {
     );
   }
 
+  // Phase 5 REC-07: 기존의 select-then-upsert(report 차감) + delete 2단계, 비원자적 패턴을
+  // Spring의 단일 원자적 트랜잭션(DELETE /api/v1/records/feed/{id})으로 대체했다. report 행이
+  // 없거나 차감 결과가 음수가 되는 경우 서버가 409를 던지고 삭제 자체가 일어나지 않는다 —
+  // 기존 "No report data"/"Negative report data" 방어와 동일한 취지.
   void deleteMyFeed() async {
     final feedId = _myFeeds[_myFeedPage].id!;
     try {
-      final reportMap = await supabase.from('report').select().eq(
-          'date', _myFeeds[_myFeedPage].createdAt!.toLocal().toIso8601String());
-      if (reportMap.isEmpty) {
-        logger.e("No report data");
-        throw "No report data";
-      }
-      Report report = Report.fromMap(map: reportMap[0]);
-      report = report.copyWith(
-        breakfast: (report.breakfast ?? 0) -
-            (_myFeeds[_myFeedPage].type == FeedType.breakfast
-                ? (_myFeeds[_myFeedPage].calorie ?? 0)
-                : 0),
-        lunch: (report.lunch ?? 0) -
-            (_myFeeds[_myFeedPage].type == FeedType.lunch
-                ? (_myFeeds[_myFeedPage].calorie ?? 0)
-                : 0),
-        dinner: (report.dinner ?? 0) -
-            (_myFeeds[_myFeedPage].type == FeedType.dinner
-                ? (_myFeeds[_myFeedPage].calorie ?? 0)
-                : 0),
-        snack: (report.snack ?? 0) -
-            (_myFeeds[_myFeedPage].type == FeedType.snack
-                ? (_myFeeds[_myFeedPage].calorie ?? 0)
-                : 0),
-      );
-      if ((report.breakfast ?? 0) < 0 ||
-          (report.lunch ?? 0) < 0 ||
-          (report.dinner ?? 0) < 0 ||
-          (report.snack ?? 0) < 0) {
-        logger.e("Negative report data");
-        throw "Negative report data";
-      }
-      await supabase
-          .from('report')
-          .upsert(report.toMap(), onConflict: 'user_id, date');
-      await supabase.from('feed').delete().eq('id', feedId);
+      await recordApiClient.deleteMyFeed(feedId);
       fetchMyFeeds();
     } catch (e) {
       logger.e(e);

@@ -22,6 +22,7 @@ import 'package:udaadaa/models/room.dart';
 import 'package:udaadaa/data/chat_api_client.dart';
 import 'package:udaadaa/data/chat_stomp_client.dart';
 import 'package:udaadaa/data/moderation_api_client.dart';
+import 'package:udaadaa/data/record_api_client.dart';
 import 'package:udaadaa/utils/analytics/analytics.dart';
 import 'package:udaadaa/utils/constant.dart';
 
@@ -2240,6 +2241,19 @@ class ChatCubit extends Cubit<ChatState> {
     }
   }
 
+  // Phase 5 REC-04: mission_complete DB 함수를 대체한다. feed/weight 기록·report 갱신·채팅
+  // 메시지 생성을 Spring이 한 트랜잭션으로 처리한다. 업로드 자체는 여전히 여기서 직접 한다
+  // (messageImagePath는 ImageMessages 버킷, feedImagePath는 FeedImages 버킷 — 기존과 동일하게
+  // 같은 이미지를 두 버킷에 각각 올린다).
+  static const Map<FeedType, String> _feedHash = {
+    FeedType.weight: '#체중',
+    FeedType.breakfast: '#아침',
+    FeedType.lunch: '#점심',
+    FeedType.dinner: '#저녁',
+    FeedType.snack: '#간식',
+    FeedType.exercise: '#운동',
+  };
+
   void missionComplete({
     required FeedType type,
     required String review,
@@ -2250,17 +2264,8 @@ class ChatCubit extends Cubit<ChatState> {
     required String contentType,
   }) async {
     if (currentRoomId == null) return;
-    final userId = supabase.auth.currentUser!.id;
-    /*
-  // 인증 데이터
-  final feedData = {
-    'user_id': userId,
-    'review': content,
-    'image_path': imageUrl,
-    'type': 'certification',
-  };*/
 
-    final [imagePath, feedData] = await Future.wait([
+    final [messageImagePath, feedData] = await Future.wait([
       uploadImage(currentRoomId!, formCubit.selectedImages[contentType]),
       formCubit.feedInfo(
         type: type,
@@ -2272,60 +2277,32 @@ class ChatCubit extends Cubit<ChatState> {
         exerciseTime: exerciseTime,
       ),
     ]);
-    if (imagePath == null) {
+    if (messageImagePath == null) {
       logger.e('Failed to upload image');
       return;
     }
-    feedData['type'] = (feedData['type'] as FeedType).name;
-
-    /*final feedData = await formCubit.feedInfo(
-      type: type,
-      review: review,
-      contentType: contentType,
-      calorie: calorie,
-      mealContent: mealContent,
-    );*/
 
     logger.d(feedData);
-    // 채팅 메시지 데이터
-    final messageData = {
-      'room_id': currentRoomId,
-      'user_id': userId,
-      'image_path': imagePath,
-      'content': mealContent,
-      'type': 'missionMessage',
-    };
-    logger.d(messageData);
-
-    Map<FeedType, String> feedHash = {
-      FeedType.weight: '#체중',
-      FeedType.breakfast: '#아침',
-      FeedType.lunch: '#점심',
-      FeedType.dinner: '#저녁',
-      FeedType.snack: '#간식',
-      FeedType.exercise: '#운동',
-    };
+    final clientRequestId = const Uuid().v4();
 
     try {
-      // 트랜잭션 실행
-      final feedId = await supabase.rpc('mission_complete', params: {
-        'user_id': userId,
-        'review': feedData['review'],
-        'feed_type': feedData['type'],
-        'feed_image_path': feedData['image_path'],
-        'calorie': feedData['calorie'],
-        'room_id': messageData['room_id'],
-        'content': '${feedHash[type]} ${messageData['content']}',
-        'message_image_path': messageData['image_path'],
-        'message_type': messageData['type'],
-        'weight_date': DateTime.now().toIso8601String(),
-        'weight': feedData['weight'],
-      });
+      final result = await recordApiClient.commitMission(
+        clientRequestId: clientRequestId,
+        roomId: currentRoomId!,
+        type: (feedData['type'] as FeedType).name,
+        review: feedData['review'] as String?,
+        messageContent: '${_feedHash[type]} ${mealContent ?? ''}',
+        feedImagePath: feedData['image_path'] as String,
+        messageImagePath: messageImagePath,
+        calorie: (feedData['calorie'] as num?)?.toInt(),
+        weight: weight,
+        exerciseTime: exerciseTime,
+      );
       formCubit.missionComplete(
         type: type,
         review: review,
         contentType: contentType,
-        feedId: feedId,
+        feedId: (result['feedId'] ?? result['weightId'])?.toString(),
         calorie: calorie,
         mealContent: mealContent,
         weight: weight,

@@ -28,12 +28,24 @@
 
 | 항목 | 위험도 | 내용 | 해결 시점 |
 |---|---|---|---|
-| Challenge가 `feed`·`weight`를 직접 읽음(CHA-04) | 중간 | Record가 아직 Spring으로 안 넘어와서 임시로 Challenge 모듈이 Record 소유 테이블을 읽기 전용으로 직접 조회한다. Notification이 `profiles.fcm_token`을 직접 읽는 것과 같은 기존 패턴이라 새로운 위반은 아니지만, Phase 5에서 Record가 전환되면 이 직접 조회를 이벤트 구독으로 반드시 교체해야 한다 — 안 하면 두 모듈이 서로의 테이블을 계속 직접 넘나보는 구조가 굳어진다 | Phase 5 |
-| `mission_complete` RPC가 `challenge`를 안 건드림 | 중간 | 미션 인증(Flutter → RPC)이 성공해도 `challenge` 테이블은 갱신되지 않는다. Flutter가 인증 직후 `updateMission()`(=`GET /challenges/me` 재조회)을 호출해야 진행 상태가 반영된다 — 이 호출이 실패하거나 누락되면 사용자가 화면을 다시 열 때까지 진행률이 갱신되지 않는다. Phase 3~4 이전부터 있던 근본적으로 같은 종류의 갭이며, Phase 5가 `mission_complete`를 대체하기 전까지는 구조적으로 해결 불가 | Phase 5 |
+| Challenge가 `feed`·`weight`를 직접 읽음(CHA-04) | 낮음(재확정) | Phase 5에서 Record가 이 두 테이블의 쓰기 소유자가 됐지만, Challenge의 직접 읽기 방식은 **의도적으로 바꾸지 않았다**(REC-06 결정) — 이벤트 구독으로 교체하는 대신, Postgres 트랜잭션 커밋 이후에는 Challenge가 언제 다시 읽어도 정확한 값이 나오므로 이 패턴을 유지하기로 확정했다. Notification의 `profiles.fcm_token` 직접 읽기와 같은 선례로 재분류(위험도 중간→낮음) | 해소(설계로 확정), 즉시 통지가 필요해지면 재검토 |
+| Record의 미션 커밋이 `challenge`를 안 건드림 | 낮음(재확정) | 기존 `mission_complete` RPC와 마찬가지로 Phase 5의 `POST /records/missions`도 `challenge` 테이블을 직접 갱신하지 않는다(REC-06에서 `MissionRecorded` 이벤트를 만들지 않기로 확정). `ChallengeCubit.updateMission()`(=`GET /challenges/me` 재조회)이 여전히 진행 상태 갱신의 유일한 경로다 — 사용자가 화면을 다시 열 때까지 진행률이 안 보일 수 있는 기존 갭이 그대로 남는다 | 미정, 즉시 통지(예: 챌린지 성공 즉시 Push)가 필요해지면 이벤트 추가 |
 | `challenge.room_id` 백필 안 됨 | 낮음 | 이번에 추가한 `room_id` 컬럼은 기존 행에는 채우지 않았다(기간과 사용자만으로는 어느 방이었는지 100% 확정할 수 없는 케이스가 있을 수 있어서). 과거 참여 기록에 대해 "이 참여가 어느 방이었는지" 조회가 필요해지면 별도 데이터 정리가 필요하다 | 미정, 실제 필요할 때 |
 | 성공 판정이 "조회 시점에만" 반영됨(compute-on-read) | 낮음 | `GET /challenges/me`를 호출해야 성공 조건 충족 여부가 계산·저장된다. 사용자가 마지막 날 미션을 완료하고 앱을 아예 안 열면 `is_success`가 영영 `false`로 남는다(원래 클라이언트 로직도 같은 한계가 있었음 — 새로운 회귀는 아니지만, 서버 배치·이벤트 기반으로 바꾸면 더 견고해질 수 있는 지점) | 미정 |
 | 동시 다중 챌린지 참여 제한 없음 | 낮음 | 한 사용자가 여러 챌린지 방에 동시 참여하거나 일반 참여+방 참여를 동시에 갖는 걸 막지 않는다(기존 앱 동작 그대로 유지 — Phase 4에서 새로 제한을 추가하지 않기로 결정) | 의도된 동작, 필요 시 별도 논의 |
 | 온보딩 7일 버그 수정의 소급 영향 미확인 | 낮음 | 온보딩 경로가 7일로 만들던 기존 챌린지 참여 데이터가 이미 운영에 쌓여있을 수 있다(과거에 온보딩으로 참여한 사용자는 애초에 성공이 불가능했던 상태). 이번 수정은 신규 참여부터 14일로 만들 뿐, 과거의 실패한 7일짜리 참여 데이터를 소급 정리하지는 않는다 | 미정, 필요 시 데이터 정리 |
+
+## Phase 5 (Record + 미션 통합)
+
+| 항목 | 위험도 | 내용 | 해결 시점 |
+|---|---|---|---|
+| `mission_complete` RPC 권한 미회수 | 중간 | Flutter가 Spring 경로로 전환됐지만 RPC 자체와 `anon`/`authenticated`의 실행 권한은 그대로 남아 있다(REC-08). 이론상 옛 클라이언트나 다른 경로로 여전히 RPC를 직접 호출할 수 있고, RPC는 `user_id`를 검증 없이 신뢰한다(System Inventory RPC-01, 기존에 이미 "높음"으로 기록된 위험) | Phase 5 안정화 확인 후 |
+| 칼로리 추정 실패 시 수동 입력 UI 없음 | 중간 | `POST /records/calorie-estimates`가 실패해도 `calorie`를 nullable로 커밋할 수 있게 API는 준비됐지만(REC-07), Flutter UI에 "추정 실패 시 직접 입력" 진입점을 이번 Phase에서 만들지 않았다 — 지금 UI 흐름대로면 추정 실패 시 사용자가 막힐 수 있다 | 미정, Flutter UX 작업 필요 |
+| 이미지 업로드-커밋 사이 부분 실패 | 중간 | 칼로리 추정 API를 커밋 트랜잭션 밖에 둔 설계(REC-02)라 "이미지 업로드는 성공했는데 커밋은 실패"한 상태가 여전히 가능하다. Phase 3-3의 미완료 업로드 정리 미구현과 같은 종류의 갭이고, 이번에도 자동 정리 배치는 만들지 않았다 | 미정 |
+| `RoomNotFoundException`이 record 모듈 경계를 못 넘음 | 낮음 | `ChatReader.recordMissionMessages`가 방 참가자가 아닌 사용자에 대해 던지는 예외가 `com.udaadaa.chat.application`(서브패키지, record에서 참조 불가)에 있어 record의 `RecordExceptionHandler`가 특정 코드로 매핑하지 못하고 전역 500으로 떨어진다. 정상 사용에서는 발생하지 않아야 하는 경로 | 미정, 필요해지면 Chat 쪽에 공개 예외 타입 추가 |
+| `feed` 삭제 시 exercise 타입은 report 미차감 | 낮음 | 기존 `deleteMyFeed()`가 breakfast/lunch/dinner/snack만 report를 차감하고 exercise는 건드리지 않던 동작을 그대로 재현했다 — 의도된 설계인지 기존 버그인지 불확실 | 미정, 실제 영향 확인 후 |
+| 이미지 이중 업로드 구조 유지 | 낮음 | REC-03에서 "업로드 하나로 합치기"를 제안했지만 실제로는 기존처럼 메시지 이미지(`ImageMessages`)와 피드 이미지(`FeedImages`)를 같은 사진으로 두 번 업로드하는 구조를 그대로 뒀다(Phase 5 범위를 좁히는 판단, §7 참고) | 미정, 필요해지면 별도 리팩터링 |
+| `CALORIE_API_URL` 배포 환경변수 미설정 | 중간 | 아직 어느 배포 환경에도 `CALORIE_API_URL`을 설정하지 않았다 — 설정 전까지는 칼로리 추정 API가 항상 500을 반환한다. 기존 Flutter dotenv `API_URL`과 같은 값으로 채워야 한다 | Spring 배포 시 |
 
 ## 이미 해결된 항목 (참고용)
 
