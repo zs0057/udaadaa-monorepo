@@ -9,6 +9,7 @@ import 'package:meta/meta.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:udaadaa/cubit/feed_cubit.dart';
 import 'package:udaadaa/cubit/profile_cubit.dart';
+import 'package:udaadaa/data/record_api_client.dart';
 import 'package:udaadaa/models/calorie.dart';
 import 'package:udaadaa/models/feed.dart';
 import 'package:udaadaa/models/report.dart';
