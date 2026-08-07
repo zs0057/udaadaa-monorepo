@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:bloc/bloc.dart';
+import 'package:dio/dio.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/widgets.dart';
 import 'package:image/image.dart' as img;
@@ -151,6 +152,15 @@ class ChatCubit extends Cubit<ChatState> {
       debugPrint("💬 Chat List Count: ${chatList.length}");
       debugPrint("💬 Image Messages Count: ${imageMessages.length}");
       debugPrint("📥 Total unread messages across all rooms: $unreadMessageCount");
+
+      // room_view.dart의 방 목록 화면은 BlocBuilder(buildWhen: ChatMessageLoaded/
+      // UnreadMessagesUpdated/ChatMessagesRefreshedFromPush)라서, 이 초기 로드가
+      // 아무 상태도 emit 안 하면 화면은 첫 build 시점(_loadRoomsAndMessages가 끝나기
+      // 전, chatList가 비어있던 순간)에 멈춘 채로 남는다 — 그 방에 아무 실시간
+      // 이벤트도 안 와서 다른 emit이 우연히 안 걸리면 목록이 영영 안 뜨는 버그였다
+      // (조용한 새 방에서 재현 확인됨). 초기 로드 완료를 명시적으로 알린다.
+      emit(ChatMessageLoaded());
+      emit(UnreadMessagesUpdated(unreadMessageCount, unreadMessages));
     } catch (e) {
       logger.e("Error initializing chat data from Spring: $e");
     }
@@ -301,6 +311,8 @@ class ChatCubit extends Cubit<ChatState> {
           after: windowStart,
           limit: 30,
         );
+        await _fillMissingSenderProfiles(
+            room, msgData.map((m) => m['senderId'] as String?));
         final loadedMessages = msgData
             .map((m) => Message.fromSpringMap(
                   map: m,
@@ -349,6 +361,8 @@ class ChatCubit extends Cubit<ChatState> {
 
       try {
         final imgData = await chatApiClient.getRecentImages(room.id, limit: 32);
+        await _fillMissingSenderProfiles(
+            room, imgData.map((m) => m['senderId'] as String?));
         imageMessages[room.id] = imgData
             .map((m) => Message.fromSpringMap(
                   map: m,
@@ -368,6 +382,37 @@ class ChatCubit extends Cubit<ChatState> {
         imageMessages[room.id] = [];
       }
     }));
+  }
+
+  /// room.memberMap(GET /rooms가 내려주는 "현재" 참가자 목록 기준)에 없는 발신자를
+  /// profiles 테이블에서 직접 채워 넣는다.
+  ///
+  /// 메시지를 보낸 뒤 방을 나간 사람이나, 방금 참가해서 아직 로컬 캐시(memberMap)에
+  /// 반영 안 된 사람의 메시지는 memberMap에서 프로필을 못 찾는다 — 그러면 chat_view가
+  /// 닉네임 대신 발신자 id를 그대로 표시한다(asDashChatUser(user, message.profile
+  /// ?.nickname ?? user), "이름이 ID값으로 보이는" 간헐적 버그의 원인). 예전 Supabase
+  /// Realtime 경로(setChatEventsListener)는 매 메시지마다 profiles를 직접 조회해서
+  /// 이 문제가 없었다 — 같은 방식으로 빠진 발신자만 보강한다(있는 건 다시 안 부른다).
+  /// 조회 결과는 room.memberMap에도 채워 넣어서 이후 같은 발신자는 캐시로 바로 찾는다.
+  Future<void> _fillMissingSenderProfiles(
+      Room room, Iterable<String?> senderIds) async {
+    final missing = senderIds.whereType<String>().toSet()
+      ..removeAll(room.memberMap.keys);
+    if (missing.isEmpty) return;
+
+    try {
+      final rows =
+          await supabase.from('profiles').select().inFilter('id', missing.toList());
+      for (final row in rows) {
+        final profile = Profile.fromMap(map: row);
+        room.memberMap[profile.id] = profile;
+        if (!room.members.any((m) => m.id == profile.id)) {
+          room.members.add(profile);
+        }
+      }
+    } catch (e) {
+      logger.e("⛔ [${room.roomName}] 발신자 프로필 보강 실패: $e");
+    }
   }
 
   /// readPositionsByRoom[roomId](참가자별 lastReadSequence)과 각 메시지의 sequence를
@@ -834,6 +879,8 @@ class ChatCubit extends Cubit<ChatState> {
         after: windowStart,
         limit: pageSize,
       );
+      await _fillMissingSenderProfiles(
+          room, data.map((m) => m['senderId'] as String?));
 
       final newMessages = data
           .where((m) => (m['sequence'] as num).toInt() < oldestSeq)
@@ -1352,7 +1399,7 @@ class ChatCubit extends Cubit<ChatState> {
     );
   }
 
-  void _handleStompMessage(String roomId, Map<String, dynamic> payload) {
+  void _handleStompMessage(String roomId, Map<String, dynamic> payload) async {
     // 같은 /topic/rooms/{roomId} 토픽에 메시지·읽음위치 이벤트가 같이 온다.
     // eventType이 없으면(구버전 서버 호환) 기존처럼 메시지로 취급한다.
     if (payload['eventType'] == 'readPosition') {
@@ -1369,6 +1416,9 @@ class ChatCubit extends Cubit<ChatState> {
     } catch (_) {
       return; // 내가 모르는 방이면 무시(구독 권한 자체가 서버에서 막히므로 실질적으로 안 옴)
     }
+
+    // 방금 참가한 사람이 보낸 첫 메시지라 로컬 memberMap에 아직 없을 수 있다.
+    await _fillMissingSenderProfiles(room, [payload['senderId'] as String?]);
 
     final message = Message.fromSpringMap(
       map: {
@@ -1421,6 +1471,8 @@ class ChatCubit extends Cubit<ChatState> {
       final myUserId = supabase.auth.currentUser!.id;
       final room = chatList.firstWhere((r) => r.id == roomId);
       final memberMap = room.memberMap;
+      await _fillMissingSenderProfiles(
+          room, data.map((m) => m['senderId'] as String?));
 
       for (final m in data) {
         final message = Message.fromSpringMap(
@@ -1612,8 +1664,19 @@ class ChatCubit extends Cubit<ChatState> {
   Future<void> joinRoom(String roomId) async {
     try {
       await chatApiClient.joinRoom(roomId);
+    } on DioException catch (e) {
+      if (e.response?.statusCode != 409) {
+        emit(JoinRoomFailed("방 참가에 실패했습니다."));
+        logger.e("joinRoom error: $e");
+        return;
+      }
+      // 409 = 이미 참가 중인 방(ALREADY_JOINED). 예전엔 이걸 그냥 실패로 처리하고
+      // 여기서 끝내버려서, 첫 시도 때 참가자 등록은 이미 성공했는데(멱등) 목록
+      // 새로고침을 못 받은 채 재시도하면 "입장했다는데 목록엔 안 보이는" 상태로
+      // 남는 버그가 있었다. 이제는 실패로 보지 않고 아래에서 목록만 새로고침한다.
+      logger.d("joinRoom: 이미 참가 중인 방 → 목록만 새로고침 (roomId=$roomId)");
     } catch (e) {
-      emit(JoinRoomFailed("이미 해당 방에 참여중입니다.")); // ❌ 실패 시 상태
+      emit(JoinRoomFailed("방 참가에 실패했습니다."));
       logger.e("joinRoom error: $e");
       return;
     }
@@ -1622,8 +1685,17 @@ class ChatCubit extends Cubit<ChatState> {
       // 새로 참가한 방을 포함해 rooms/messages/images를 통째로 다시 불러온다
       // (기존처럼 방별로 따로따로 REST를 부르는 대신 _initialize()와 같은 경로를 재사용).
       await _loadRoomsAndMessages();
-      chatStompClient.subscribeToRoom(roomId);
+    } catch (e) {
+      // 목록 새로고침 자체가 실패하면 "입장 성공"이라고 거짓으로 알리지 않는다 —
+      // 참가자 등록(POST /participants)은 멱등이라 재시도하면 그대로 목록에 뜬다.
+      logger.e("joinRoom 목록 새로고침 실패: $e");
+      emit(JoinRoomFailed("방에 참가했지만 목록을 불러오지 못했습니다. 다시 시도해주세요."));
+      return;
+    }
 
+    chatStompClient.subscribeToRoom(roomId);
+
+    try {
       final roomInfo = chatList.firstWhere((room) => room.id == roomId);
       await fetchRoomRanking(roomInfo, emitLoaded: false);
       if (roomInfo.startDay != null && roomInfo.endDay != null) {
@@ -1636,8 +1708,10 @@ class ChatCubit extends Cubit<ChatState> {
         }
       }
     } catch (e) {
-      logger.e("joinRoom 후처리 실패: $e");
+      // 랭킹·챌린지 연동은 부가 기능이라 실패해도 "방 참가" 자체는 성공으로 본다.
+      logger.e("joinRoom 부가 처리 실패: $e");
     }
+
     emit(JoinRoomSuccess()); // ✅ 성공 시 상태
     emit(ChatMessageLoaded());
   }
