@@ -9,6 +9,7 @@ import 'package:meta/meta.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:udaadaa/cubit/feed_cubit.dart';
 import 'package:udaadaa/cubit/profile_cubit.dart';
+import 'package:udaadaa/data/record_api_client.dart';
 import 'package:udaadaa/models/calorie.dart';
 import 'package:udaadaa/models/feed.dart';
 import 'package:udaadaa/models/report.dart';
@@ -150,6 +151,8 @@ class FormCubit extends Cubit<FormState> {
     }
   }
 
+  // Phase 5 REC-01: 외부 칼로리 추정 서비스를 더 이상 Flutter가 직접 부르지 않는다.
+  // 같은 서비스를 Spring이 서버-서버로 대리 호출한다(recordApiClient.estimateCalorie).
   Future<void> calculate(
     String mealContent,
   ) async {
@@ -160,14 +163,10 @@ class FormCubit extends Cubit<FormState> {
         emit(FormError('Failed to get base64 image'));
         return;
       }
-      final res = await dioClient.dio.post(
-        '/estimateCal',
-        data: {
-          'selectedImage': base64String,
-          'description': mealContent,
-        },
+      final jsonResponse = await recordApiClient.estimateCalorie(
+        selectedImage: base64String,
+        description: mealContent,
       );
-      final Map<String, dynamic> jsonResponse = json.decode(res.toString());
       Calorie calorie = Calorie.fromJson(jsonResponse);
       emit(FormCalorie(calorie));
     } catch (e) {
@@ -214,6 +213,10 @@ class FormCubit extends Cubit<FormState> {
     }
   }
 
+  // Phase 5 REC-05: report 갱신은 이제 Spring의 미션 커밋 트랜잭션이 원자적으로 처리한다
+  // (기존 updateReport()의 select-then-upsert 비원자적 패턴은 더 이상 쓰지 않는다 — 여기서
+  // 다시 호출하면 서버가 이미 반영한 값 위에 또 더해져 이중 집계가 된다). 여기서는 서버가
+  // 반영한 결과를 다시 읽어오기만 한다.
   void missionComplete(
       {required FeedType type,
       required String review,
@@ -225,17 +228,9 @@ class FormCubit extends Cubit<FormState> {
       required String contentType,
       String? feedId}) {
     emit(FormSuccess());
-    updateReport(
-      type: type,
-      review: review,
-      contentType: contentType,
-      mealType: mealType,
-      weight: weight,
-      exerciseTime: exerciseTime,
-      mealContent: mealContent,
-      feedId: feedId,
-      calorie: calorie,
-    );
+    selectedImages[contentType] = null;
+    profileCubit.getMyTodayReport();
+    profileCubit.selectDay(DateTime.now());
     feedCubit.fetchMyFeeds();
   }
 
@@ -323,6 +318,10 @@ class FormCubit extends Cubit<FormState> {
     }
   }
 
+  // Phase 5 REC-05: missionComplete()가 더 이상 이 메서드를 호출하지 않는다(report 갱신은
+  // 이제 Spring 미션 커밋 트랜잭션이 원자적으로 처리). 이 메서드 자체는 실제 호출부가 없는
+  // 죽은 코드로 남아 있다 — 삭제하지 않고 남긴 이유는 기존 4-F(Challenge)에서와 같은 원칙:
+  // 이번 전환의 스코프가 아니고, 남겨둬도 컴파일·동작에 영향이 없다.
   Future<void> updateReport({
     required FeedType type,
     String? review,

@@ -57,8 +57,9 @@ Udaadaa는 채팅과 챌린지를 통해 사용자가 건강 목표를 꾸준히
   - [ ] **Phase 4 — Challenge** · 구현 중
     - 챌린지 참여·기간·미션 진행과 성공 판정을 이전합니다. 방 참가+챌린지 참여를 하나의 서버 트랜잭션으로 묶었습니다.
     - 상세 문서: [Phase 4 Challenge](docs/migration/phases/phase-04-challenge.md)
-  - [ ] **Phase 5 — Record + 미션 통합** · 예정
-    - 식단·운동·체중 기록과 `mission_complete` 흐름을 이전합니다.
+  - [ ] **Phase 5 — Record + 미션 통합** · 구현 중
+    - 식단·운동·체중 기록과 `mission_complete` 흐름을 이전합니다. 미션 인증(Record 기록+리포트+Chat 메시지)을 하나의 서버 트랜잭션으로 묶었습니다.
+    - 상세 문서: [Phase 5 Record + 미션 통합](docs/migration/phases/phase-05-record-mission-integration.md)
   - [ ] **Phase 6 — Social** · 예정
     - 공개 피드·반응·피드 숨김을 이전합니다.
   - [ ] **Phase 7 — 회원 탈퇴** · 예정

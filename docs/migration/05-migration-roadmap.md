@@ -401,7 +401,7 @@ Supabase PostgreSQL, Auth와 Storage는 초기 마이그레이션에서 바로 �
 | 2. Moderation | 구현 중 | [Phase 2 계획](phases/phase-02-moderation.md) — Spring·Flutter 코드 작성 완료, 로컬 `./gradlew test` 통과 확인. 실기기 테스트만 남음 |
 | 3. Chat + Notification | 계획 | [Phase 3 계획](phases/phase-03-chat-notification.md) — 조사·3-1~3-4 계획 완료, 구현 승인 대기 |
 | 4. Challenge | 구현 중 | [Phase 4 계획](phases/phase-04-challenge.md) — CHA-01~06 승인, Spring·Flutter 코드 작성 완료. 로컬 `./gradlew test`·`flutter analyze` 확인과 실기기 테스트만 남음 |
-| 5. Record + 미션 통합 | 예정 | 미션 E2E·정합성·멱등성 검증 |
+| 5. Record + 미션 통합 | 구현 중 | [Phase 5 문서](phases/phase-05-record-mission-integration.md) — REC-01~08 승인·구현 완료, 로컬 빌드 확인 대기 |
 | 6. Social | 예정 | 공개 범위·반응·알림 테스트 |
 | 7. 회원 탈퇴 | 예정 | 단계별 실패·재시도·정책 검증 |
 | 8. 안정화·의존성 제거 | 예정 | 운영 지표와 Supabase 의존성 재조사 |

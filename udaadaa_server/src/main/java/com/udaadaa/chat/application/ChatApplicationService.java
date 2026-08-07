@@ -2,6 +2,7 @@ package com.udaadaa.chat.application;
 
 import com.udaadaa.challenge.ChallengeReader;
 import com.udaadaa.chat.ChatMessageCreated;
+import com.udaadaa.chat.ChatReader;
 import com.udaadaa.chat.ReadPositionUpdated;
 import com.udaadaa.chat.RoomId;
 import com.udaadaa.chat.domain.ChallengeRoomPeriod;
@@ -23,11 +24,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-public class ChatApplicationService {
+public class ChatApplicationService implements ChatReader {
 
     static final int MAX_MESSAGE_PAGE_SIZE = 50;
 
-    // missionMessage는 mission_complete DB 함수(Record/Challenge 트랜잭션)가 전담한다(Phase 5 소관).
+    // missionMessage는 REST로 만들 수 없다 — ChatReader.recordMissionMessages(Phase 5 REC-04)를
+    // 통해서만 Record 모듈의 미션 커밋 트랜잭션 안에서 만들어진다.
     // infoMessage는 현재 클라이언트가 직접 만들지 않는 시스템 메시지 타입이라 이 API 범위 밖이다.
     private static final Set<String> CREATABLE_MESSAGE_TYPES = Set.of("textMessage", "imageMessage");
 
@@ -137,6 +139,44 @@ public class ChatApplicationService {
                 saved.sequence()
         ));
         return saved;
+    }
+
+    /**
+     * Phase 5 REC-04: Record의 미션 커밋 트랜잭션 안에서 호출된다(기본 전파 REQUIRED로
+     * 호출부 트랜잭션에 합류 — 새 트랜잭션을 열지 않는다). missionMessage와, 있다면
+     * 리뷰 textMessage까지 순서대로 저장하고 각각 ChatMessageCreated를 발행해 일반
+     * sendMessage와 동일하게 STOMP 실시간 전달·Push 알림이 나가도록 한다.
+     */
+    @Override
+    @Transactional
+    public void recordMissionMessages(
+            MemberId senderId,
+            UUID roomId,
+            String missionMessageContent,
+            String missionMessageImagePath,
+            String reviewText
+    ) {
+        RoomId room = RoomId.from(roomId);
+        requireParticipant(room, senderId);
+
+        saveAndPublish(room, senderId, "missionMessage", missionMessageContent, missionMessageImagePath);
+
+        if (reviewText != null && !reviewText.isBlank()) {
+            saveAndPublish(room, senderId, "textMessage", reviewText, null);
+        }
+    }
+
+    private void saveAndPublish(RoomId roomId, MemberId senderId, String type, String content, String imagePath) {
+        MessageSummary saved = chatRepository.saveMessage(roomId, senderId, UUID.randomUUID(), type, content, imagePath);
+        eventPublisher.publishEvent(new ChatMessageCreated(
+                saved.id(),
+                saved.roomId(),
+                saved.senderId(),
+                saved.type(),
+                saved.content(),
+                saved.imagePath(),
+                saved.sequence()
+        ));
     }
 
     /**

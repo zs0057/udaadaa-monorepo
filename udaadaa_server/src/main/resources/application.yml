@@ -46,6 +46,10 @@ app:
       project-id: ${FCM_PROJECT_ID:udaadaa}
       client-email: ${FCM_CLIENT_EMAIL:}
       private-key: ${FCM_PRIVATE_KEY:}
+  record:
+    calorie-api:
+      # 기존 Flutter dotenv API_URL과 같은 값을 가리켜야 한다(같은 외부 서비스, 호출 주체만 바뀜).
+      base-url: ${CALORIE_API_URL:}
 
 logging:
   pattern:

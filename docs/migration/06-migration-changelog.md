@@ -110,9 +110,20 @@
 
 **아직 안 바뀐 것**: `mission_complete` RPC는 여전히 `challenge`를 갱신하지 않는다(Phase 5 소관). 미션 인증 직후 진행 상태가 즉시 반영되지 않고, Flutter가 인증 후 `updateMission()`(=서버에 다시 물어보는 `refresh()`)을 호출해야 반영된다 — 이전에도 클라이언트가 재계산해야 했던 것과 근본적으로 같은 갭이다.
 
-## Phase 5 이후
+## Phase 5: Record + 미션 통합
 
-아직 계획 단계이거나 시작 전이라 매핑할 내용이 없다. Phase가 진행되면 이 문서에 같은 형식으로 이어서 추가한다.
+| 기능 | 이전 | 이후 |
+|---|---|---|
+| 미션 인증(식단/운동/체중 기록) | `ChatCubit.missionComplete()`가 `supabase.rpc('mission_complete', ...)` 호출 — `feed`(또는 `weight`) insert + `messages` insert(missionMessage+textMessage)만 RPC 안에서 원자적, `report` 갱신은 RPC 성공 후 별도로 클라이언트가 처리 | `POST /api/v1/records/missions` — feed/weight 기록 + report 갱신 + Chat 메시지 저장을 Spring이 하나의 `@Transactional`로 처리. `clientRequestId`로 재시도해도 중복 생성 안 됨 |
+| 일별 리포트(report) 갱신 | `FormCubit.updateReport()` — `select` 후 `+=`으로 더해서 다시 `upsert`하는 read-modify-write(경쟁 상태에 취약, RPC와 별도 트랜잭션) | `JdbcRecordRepository.applyReportDelta()` — `insert ... on conflict (user_id, date) do update set col = coalesce(report.col,0) + excluded.col` 단일 원자적 SQL. `FormCubit`은 서버가 반영한 값을 다시 읽기만 함 |
+| 외부 칼로리 추정 API 호출 | `FormCubit.calculate()`가 Flutter에서 직접 `dotenv.env['API_URL']/estimateCal` 호출 | `POST /api/v1/records/calorie-estimates` — Spring이 같은 외부 서비스를 서버-서버로 대리 호출(`CALORIE_API_URL`). 응답 포맷은 기존과 동일(snake_case)이라 Flutter `Calorie.fromJson()`은 그대로 |
+| 내 피드 삭제 | `FeedCubit.deleteMyFeed()` — report `select` → 계산 → `upsert`(음수면 throw) → `feed` `delete`, 2단계 비원자적 | `DELETE /api/v1/records/feed/{feedId}` — report 차감과 feed 삭제를 한 트랜잭션으로. 리포트 없음/음수면 409로 삭제 자체가 안 일어남(행 잠금 포함, 기존보다 동시성에 더 안전) |
+| missionMessage 실시간 전달 | RPC가 `messages`에 직접 insert — Phase 3의 STOMP 전환 이후 이 경로만 `ChatMessageCreated`를 못 태워 다른 참가자에게 실시간으로 안 보였을 가능성 있음 | `ChatReader.recordMissionMessages()`가 일반 메시지와 동일하게 `ChatMessageCreated`를 발행 — STOMP 실시간 전달·Push 알림 정상 작동 |
+| 미션 메시지 순서(본문+리뷰) | RPC가 리뷰 텍스트 메시지 시각을 `now() + interval '1 millisecond'`로 밀어서 순서 보장 | Phase 3-1의 `messages.sequence`(DB 트리거 자동 채번)가 이미 삽입 순서를 보장해 트릭 불필요 |
+
+**계획에서 뺀 것**: `GET /api/v1/records?date=`(범용 기록 목록), `POST /api/v1/records/image-uploads`는 만들지 않았다 — 일반 기록 조회는 지금처럼 Flutter가 Supabase에서 직접 읽고(RLS로 보호됨), 이미지 업로드는 기존 이중 업로드 구조(메시지 이미지는 Chat CHT-06 경로, 피드 이미지는 Flutter가 `FeedImages`에 직접)를 그대로 뒀다. 상세: [Phase 5 Record + 미션 통합](phases/phase-05-record-mission-integration.md) §7.
+
+**아직 안 바뀐 것**: `mission_complete` RPC는 권한이 회수되지 않고 그대로 남아 있다(REC-08, Spring 경로 안정성 확인 후 정리 예정). 칼로리 추정 실패 시 Flutter의 수동 입력 UI 진입점은 이번 Phase에서 만들지 않았다(API 계약만 준비).
 
 ---
 
@@ -125,6 +136,7 @@
 | 2. Moderation | 완료 (Flutter 전환까지, 실기기 테스트만 전체 종료 후 일괄) | `com.udaadaa.moderation`, `lib/cubit/chat_cubit.dart`(차단 부분) |
 | 3. Chat + Notification | Flutter 전환 A~D 완료, 스모크 테스트로 회귀 4건 수정 완료. Notification은 서버 코드만 완료(기존 Trigger 병행 중) | `com.udaadaa.chat`, `com.udaadaa.notification`, `lib/cubit/chat_cubit.dart` |
 | 4. Challenge | 코드 완료 (로컬 `./gradlew test`·`flutter analyze` 확인 대기, 실기기 테스트는 전체 종료 후 일괄) | `com.udaadaa.challenge`, `lib/cubit/challenge_cubit.dart`, `lib/data/challenge_api_client.dart` |
-| 5~8 | 예정 | — |
+| 5. Record + 미션 통합 | 코드 완료 (로컬 `./gradlew test`·`flutter analyze` 확인 대기, 실기기 테스트는 전체 종료 후 일괄) | `com.udaadaa.record`, `lib/cubit/chat_cubit.dart`(missionComplete)·`form_cubit.dart`(calculate)·`feed_cubit.dart`(deleteMyFeed), `lib/data/record_api_client.dart` |
+| 6~8 | 예정 | — |
 
 실기기 회귀 테스트(Task #8)는 전체 Phase 종료 후 일괄 진행하기로 결정된 상태라 이 문서의 "완료"는 코드·시뮬레이터 검증 기준이다.
