@@ -31,6 +31,9 @@ Udaadaa는 채팅과 챌린지를 통해 사용자가 건강 목표를 꾸준히
 - [x] 도메인별 마이그레이션 로드맵 작성
   - 공통 기반부터 Member, Moderation, Chat·Notification, Challenge, Record, Social과 의존성 제거까지의 순서와 완료·롤백 기준을 정의했습니다.
   - 상세 문서: [Migration Roadmap](docs/migration/05-migration-roadmap.md)
+- [x] Phase별 Before → After 변경 매핑 작성 (진행하면서 갱신)
+  - 기존 Flutter/Supabase 코드가 어떤 Spring API·Flutter 코드로 바뀌었는지 기능 단위로 정리했습니다.
+  - 상세 문서: [Migration Changelog](docs/migration/06-migration-changelog.md)
 - [ ] 기능 단위 Spring 이전 및 검증
   - [x] **Phase 0 — Spring 공통 기반** · 완료
     - Spring 실행·인증·DB·모듈·오류·관찰·테스트 기반을 준비합니다.
