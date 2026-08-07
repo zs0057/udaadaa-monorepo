@@ -70,7 +70,11 @@ class Profile {
       createdAt: createdAt,
       height: height,
       weight: weight,
-      pushOption: previous?.pushOption,
+      // previous가 null인 경우(신규 가입 직후 첫 로드)는 이어붙일 값이 없다.
+      // pushOption을 null로 두면 이후 _updateFCMToken의 upsert가 push_option에
+      // null을 그대로 써서 profiles.push_option NOT NULL 제약을 위반한다
+      // (신규 계정에서 재현 확인됨) — 기본값 true로 채운다.
+      pushOption: previous?.pushOption ?? true,
       fcmToken: previous?.fcmToken,
     );
   }

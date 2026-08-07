@@ -143,6 +143,8 @@ notification/ (3-4)
 
 2026-08-06 Flutter 전환 D(읽음 위치·안읽음 배지) 구현: `sendReadReceipt`(방을 열어둔 채 새 메시지를 받을 때)와 `enterRoom1`(방 진입 시 몰아서 읽음 처리)을 메시지별 `read_receipts` upsert 대신 `PATCH /rooms/{roomId}/read-position` 호출로 바꿨다. 메시지 옆 "안읽음 N명" 배지는 예전엔 메시지마다 있던 `read_receipts` row 개수로 계산했는데, 새 API는 방별 `lastReadSequence` 하나만 갱신하므로 그 방식이 통하지 않는다 — 그래서 방 참가자 전원의 읽음 위치(`GET /rooms/{roomId}/read-positions`)와 각 메시지의 `sequence`를 비교해 "누가 이 메시지를 읽었는지"를 클라이언트가 역산하는 방식(`_recomputeReadReceiptsForRoom`)으로 바꿨다. 다른 참가자가 읽었을 때도 배지가 즉시 줄어들도록, 원래 계획에는 없었지만 백엔드에 읽음 위치 전용 내부 이벤트(`ReadPositionUpdated`, 실제로 값이 전진했을 때만 발행)와 STOMP 브로드캐스트(`ReadPositionBroadcaster`)를 새로 추가했다 — 기존 메시지 브로드캐스트와 같은 `/topic/rooms/{roomId}` 토픽을 공유하고 `eventType` 필드(`"message"`/`"readPosition"`)로 구분한다(필드가 없는 구버전 페이로드는 안전하게 "message"로 취급). 이 김에 FCM 백그라운드 Push 수신 시 상태를 새로고침하던 `refreshAllMessagesForPush`도 손봤다 — 이 함수가 여전히 `loadChatList`/`fetchLatestMessages`/`fetchLatestReceipt` 등 Phase A 이전의 Supabase 직접 조회 경로를 쓰고 있어서(전환 당시 놓친 호출부), 새 쓰기 경로 전환 이후로는 갈수록 부정확해질 상황이었다 — `_loadRoomsAndMessages()`(Spring REST 기반) 호출로 통일했다.
 
+2026-08-07 채팅 실시간 스모크 테스트(시뮬레이터 2대 + 로컬 Spring↔운영 DB) 중 버그 4건 발견·수정: 발신자 닉네임이 ID로 보이는 캐시 미스, 이미 참가 중인 방(409) 처리 미흡으로 목록 미갱신, 신규 계정 `push_option` NOT NULL 위반, 그리고 가장 결정적으로 — 앱 시작 시 데이터 로드가 상태를 emit 안 해서 방 목록 화면이 첫 렌더(빈 상태)에 영구히 멈추는 버그. 상세: [2026-08-07 채팅 스모크 테스트 트러블슈팅](../progress/2026-08-07-phase-03-chat-smoke-test-troubleshooting.md).
+
 ## 8. 선행 조건과 위험
 
 - ~~Phase 0~2에서 만든 `spring_app` Role에 `rooms`, `room_participants`, `messages`, `chat_reactions`, `read_receipts`, `blocked_messages` 권한이 아직 없다~~ 2026-08-06 SELECT 권한 부여 완료([SQL](../../../udaadaa_server/scripts/db-admin/phase-03-spring-app-chat-read-grant.sql)). INSERT/UPDATE/DELETE는 3-2 착수 시 추가.
